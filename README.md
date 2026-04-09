@@ -1,6 +1,8 @@
 # Gemini Folders Extension
 
-A Manifest V3 Chrome extension that adds a custom folder organizer to the Gemini sidebar.
+A Manifest V3 extension that adds a custom folder organizer to the Gemini app on Windows.
+
+This is not for the Chrome Gemini website.
 
 ## What It Adds
 
