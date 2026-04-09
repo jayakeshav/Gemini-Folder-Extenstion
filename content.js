@@ -330,6 +330,72 @@
     return text || "Untitled Chat";
   }
 
+  function normalizeDisplayTitle(value) {
+    return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
+  function isUnhelpfulChatTitle(title) {
+    const normalized = normalizeDisplayTitle(title).toLowerCase();
+    if (!normalized) {
+      return true;
+    }
+
+    return (
+      normalized === "chat" ||
+      normalized === "chats" ||
+      normalized === "new chat" ||
+      normalized === "new chats" ||
+      normalized === "all chats" ||
+      normalized === "conversation" ||
+      normalized === "conversations" ||
+      normalized === "history" ||
+      normalized === "gemini"
+    );
+  }
+
+  function getMeaningfulTitleFromElement(element) {
+    if (!element) {
+      return "";
+    }
+
+    const candidate = normalizeDisplayTitle(element.textContent || element.getAttribute("aria-label") || element.title || "");
+    return candidate && !isUnhelpfulChatTitle(candidate) ? candidate : "";
+  }
+
+  function getMainChatTitleCandidate() {
+    const selectors = [
+      'main [data-test-id="conversation-title"]',
+      'main [data-testid="conversation-title"]',
+      'main [data-test-id*="conversation-title" i]',
+      'main [data-testid*="conversation-title" i]',
+      'main [data-test-id*="title" i]',
+      'main [data-testid*="title" i]',
+      'main [aria-label*="title" i]',
+      'main [role="heading"]',
+      "main h1",
+      "main h2",
+      "main h3"
+    ];
+
+    for (const selector of selectors) {
+      const title = getMeaningfulTitleFromElement(document.querySelector(selector));
+      if (title) {
+        return title;
+      }
+    }
+
+    return "";
+  }
+
+  function getDocumentTitleCandidate() {
+    const raw = normalizeDisplayTitle(document.title || "");
+    if (!raw) {
+      return "";
+    }
+
+    return normalizeDisplayTitle(raw.replace(/\s*[-|]\s*gemini.*$/i, ""));
+  }
+
   function getChatUrl(chatId) {
     return `/app/${chatId}`;
   }
@@ -359,15 +425,19 @@
   }
 
   function getCurrentChatTitle() {
-    const heading = document.querySelector("main h1");
-    const headingText = (heading?.textContent || "").trim();
-    if (headingText) {
-      return headingText;
+    const mainTitle = getMainChatTitleCandidate();
+    if (mainTitle) {
+      return mainTitle;
     }
 
-    const sidebarTitle = getSelectedSidebarChatTitle();
-    if (sidebarTitle) {
+    const sidebarTitle = normalizeDisplayTitle(getSelectedSidebarChatTitle());
+    if (sidebarTitle && !isUnhelpfulChatTitle(sidebarTitle)) {
       return sidebarTitle;
+    }
+
+    const documentTitle = getDocumentTitleCandidate();
+    if (documentTitle && !isUnhelpfulChatTitle(documentTitle)) {
+      return documentTitle;
     }
 
     return "Untitled Chat";
@@ -396,6 +466,16 @@
     if (selected) {
       selected.classList.add("selected");
     }
+  }
+
+  function syncSelectedCustomChatFromCurrentPath() {
+    const chatId = getCurrentChatIdFromPath();
+    if (!chatId) {
+      markCustomChatItemSelected("");
+      return;
+    }
+
+    markCustomChatItemSelected(chatId);
   }
 
   function handleCustomChatItemClick(event, chatId) {
@@ -1045,6 +1125,7 @@
     const state = await loadFolderState();
     renderFolders(activeFoldersList, state.folders, state.chatToFolderMap);
     syncState(activeFoldersRoot, findHistoryContainer(findSidebar()));
+    syncSelectedCustomChatFromCurrentPath();
   }
 
   async function handleCreateFolder(parentId = null) {
@@ -1325,6 +1406,7 @@
 
       const state = await loadFolderState();
       renderFolders(list, state.folders, state.chatToFolderMap);
+      syncSelectedCustomChatFromCurrentPath();
 
       newFolderButton.addEventListener("click", () => {
         fireAndForget(handleCreateFolder(), "handleCreateFolder failed");
@@ -1368,6 +1450,7 @@
 
       bindFolderContextMenuListener();
       scheduleEnsureQuickAddButton();
+      syncSelectedCustomChatFromCurrentPath();
       tryInject();
     });
 
@@ -1407,12 +1490,16 @@
 
     window.addEventListener("unhandledrejection", handleUnhandledRejection);
     window.addEventListener("error", handleGlobalError);
+    window.addEventListener("popstate", () => {
+      syncSelectedCustomChatFromCurrentPath();
+    });
 
     const init = () => {
       setTimeout(() => {
         observeGeminiSidebar();
         observeMainHeaderArea();
         ensureQuickAddButton();
+        syncSelectedCustomChatFromCurrentPath();
       }, 1000);
     };
 
