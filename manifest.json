@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Gemini Folders",
+  "version": "1.0.0",
+  "description": "Adds a folder organizer to the Gemini sidebar.",
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["https://gemini.google.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

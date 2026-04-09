@@ -1,0 +1,455 @@
+#gfo-folders-root.gfo-root {
+  font-family: "Google Sans", "Segoe UI", sans-serif;
+  background: #1f1f1f;
+  border: 1px solid #2f2f2f;
+  border-radius: 12px;
+  margin: 0;
+  padding: 8px 0;
+  color: #e8eaed;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  align-self: stretch;
+  position: static;
+  contain: layout;
+  will-change: transform;
+  transition: none;
+}
+
+.gfo-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  margin: 0;
+  width: 100%;
+  min-height: 56px;
+  padding: 16px 16px 8px 16px;
+  box-sizing: border-box;
+}
+
+.gfo-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: #e8eaed;
+}
+
+.gfo-title-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 2px solid #d7dbe0;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  margin-right: 12px;
+}
+
+.gfo-new-folder {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #3b4450;
+  background: #0b57d0;
+  color: #ffffff;
+  border-radius: 20px;
+  height: 40px;
+  padding: 0 16px;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: 8px;
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+  box-sizing: border-box;
+}
+
+.gfo-clear-filter {
+  margin-left: auto;
+  margin-right: 8px;
+  border: 1px solid #3b4450;
+  background: transparent;
+  color: #d7dbe0;
+  border-radius: 14px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.gfo-clear-filter:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.gfo-button-icon {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.gfo-new-folder:hover {
+  background: #1a73e8;
+}
+
+.gfo-new-folder:active {
+  transform: translateY(1px);
+}
+
+.gfo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 0 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.gfo-folder-node {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.gfo-folder-item {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: #262626;
+  border: 1px solid #333333;
+  border-radius: 10px;
+  min-height: 44px;
+  padding: 0 12px 0 16px;
+  margin: 0 8px 4px;
+  box-sizing: border-box;
+  width: calc(100% - 16px);
+  min-width: 0;
+}
+
+.gfo-folder-item--child {
+  width: calc(100% - 16px);
+}
+
+.gfo-toggle-folder {
+  border: 0;
+  background: transparent;
+  color: #bcbcbc;
+  padding: 0;
+  margin: 0 8px 0 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.gfo-toggle-folder.is-open {
+  color: #d7dbe0;
+}
+
+.gfo-folder-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #8ab4f8;
+  flex: 0 0 auto;
+  margin-right: 12px;
+}
+
+.gfo-folder-name {
+  font-size: 13px;
+  line-height: 1.3;
+  color: #dce1e7;
+  word-break: break-word;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gfo-folder-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.gfo-folder-item--active {
+  border-color: #8ab4f8;
+  background: rgba(138, 180, 248, 0.16);
+}
+
+.gfo-folder-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-left: auto;
+  min-width: 40px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gfo-folder-item:hover .gfo-folder-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.gfo-folder-action {
+  border: 0;
+  background: transparent;
+  color: #bcbcbc;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.gfo-folder-action-delete {
+  color: #bcbcbc;
+}
+
+.gfo-folder-action-add {
+  color: #bcbcbc;
+}
+
+.gfo-folder-children {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-left: 16px;
+  margin-top: 4px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.gfo-empty-state {
+  font-size: 12px;
+  color: #9aa0a6;
+  padding: 6px 2px;
+}
+
+.gfo-hidden {
+  display: none !important;
+}
+
+.gfo-native-chat-item {
+  position: relative;
+}
+
+.gfo-native-chat-item a[data-test-id="conversation"] {
+  padding-right: 28px;
+}
+
+.gfo-chat-move-button {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: #aeb4bb;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gfo-native-chat-item:hover .gfo-chat-move-button,
+.gfo-chat-move-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.gfo-chat-move-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gfo-move-menu {
+  position: fixed;
+  z-index: 2147483000;
+  min-width: 220px;
+  max-width: 280px;
+  background: #202124;
+  border: 1px solid #3c4043;
+  border-radius: 10px;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+  padding: 6px;
+}
+
+.gfo-move-menu-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #e8eaed;
+  text-align: left;
+  border-radius: 8px;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gfo-move-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gfo-move-menu-item.is-active {
+  color: #8ab4f8;
+}
+
+.gfo-move-menu-empty {
+  color: #9aa0a6;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+/* Collapsed rail behavior based on Gemini state class. */
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root,
+#gfo-folders-root.gfo-collapsed {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  padding: 0;
+  align-items: center;
+}
+
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-title,
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-button-label,
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-clear-filter,
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-folder-name,
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-empty-state,
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-toggle-folder,
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-folder-actions,
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-folder-children,
+#gfo-folders-root.gfo-collapsed .gfo-title,
+#gfo-folders-root.gfo-collapsed .gfo-button-label,
+#gfo-folders-root.gfo-collapsed .gfo-clear-filter,
+#gfo-folders-root.gfo-collapsed .gfo-folder-name,
+#gfo-folders-root.gfo-collapsed .gfo-empty-state,
+#gfo-folders-root.gfo-collapsed .gfo-toggle-folder,
+#gfo-folders-root.gfo-collapsed .gfo-folder-actions,
+#gfo-folders-root.gfo-collapsed .gfo-folder-children {
+  display: none;
+}
+
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-title-dot,
+#gfo-folders-root.gfo-collapsed .gfo-title-dot {
+  margin: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #1f1f1f;
+  border: 1px solid #2f2f2f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-new-folder,
+#gfo-folders-root.gfo-collapsed .gfo-new-folder {
+  margin: 0;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 999px;
+  padding: 0;
+}
+
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-header,
+#gfo-folders-root.gfo-collapsed .gfo-header {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: auto;
+  padding: 8px 0;
+}
+
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-list,
+#gfo-folders-root.gfo-collapsed .gfo-list {
+  width: 100%;
+  align-items: center;
+}
+
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-folder-item,
+#gfo-folders-root.gfo-collapsed .gfo-folder-item {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 999px;
+  padding: 0;
+  margin: 0 0 8px;
+  justify-content: center;
+}
+
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-folder-node,
+#gfo-folders-root.gfo-collapsed .gfo-folder-node {
+  width: 100%;
+}
+
+.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-folder-dot,
+#gfo-folders-root.gfo-collapsed .gfo-folder-dot {
+  margin-right: 0;
+}
+
+.sidenav-with-history-container.expanded #gfo-folders-root,
+#gfo-folders-root.gfo-expanded {
+  background: #1f1f1f;
+  border: 1px solid #2f2f2f;
+  border-radius: 12px;
+  margin: 0;
+  padding: 8px 0;
+}
+
+.sidenav-with-history-container.expanded #gfo-folders-root .gfo-title,
+.sidenav-with-history-container.expanded #gfo-folders-root .gfo-button-label,
+.sidenav-with-history-container.expanded #gfo-folders-root .gfo-clear-filter,
+.sidenav-with-history-container.expanded #gfo-folders-root .gfo-folder-name,
+.sidenav-with-history-container.expanded #gfo-folders-root .gfo-empty-state,
+#gfo-folders-root.gfo-expanded .gfo-title,
+#gfo-folders-root.gfo-expanded .gfo-button-label,
+#gfo-folders-root.gfo-expanded .gfo-clear-filter,
+#gfo-folders-root.gfo-expanded .gfo-folder-name,
+#gfo-folders-root.gfo-expanded .gfo-empty-state {
+  display: initial;
+}
+
+.sidenav-with-history-container.expanded #gfo-folders-root .gfo-folder-actions,
+#gfo-folders-root.gfo-expanded .gfo-folder-actions,
+.sidenav-with-history-container.expanded #gfo-folders-root .gfo-toggle-folder,
+#gfo-folders-root.gfo-expanded .gfo-toggle-folder,
+.sidenav-with-history-container.expanded #gfo-folders-root .gfo-folder-children,
+#gfo-folders-root.gfo-expanded .gfo-folder-children {
+  display: flex;
+}
