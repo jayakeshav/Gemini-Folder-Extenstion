@@ -255,10 +255,16 @@
   line-height: 1.2;
   cursor: pointer;
   box-sizing: border-box;
+  text-decoration: none;
 }
 
 .gfo-folder-chat-item:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.gfo-folder-chat-item.selected {
+  border-color: #8ab4f8;
+  background: rgba(138, 180, 248, 0.16);
 }
 
 .gfo-folder-context-menu {
@@ -315,6 +321,71 @@
 }
 
 .gfo-folder-context-menu-empty {
+  color: #c0c0c0;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+#gfo-quick-add.gfo-quick-add {
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #e8eaed;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  margin-left: 4px;
+  flex: 0 0 auto;
+}
+
+#gfo-quick-add.gfo-quick-add:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.gfo-quick-add-menu {
+  position: fixed;
+  z-index: 2147483000;
+  min-width: 240px;
+  max-width: 320px;
+  background: #2e2e2e;
+  border: 1px solid #444;
+  border-radius: 10px;
+  color: #ffffff;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.45);
+  padding: 6px;
+}
+
+.gfo-quick-add-menu-header {
+  font-size: 12px;
+  color: #e8eaed;
+  padding: 4px 10px 8px;
+  opacity: 0.9;
+}
+
+.gfo-quick-add-menu-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #ffffff;
+  text-align: left;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gfo-quick-add-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gfo-quick-add-menu-empty {
   color: #c0c0c0;
   font-size: 12px;
   padding: 8px 10px;

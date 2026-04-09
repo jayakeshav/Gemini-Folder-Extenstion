@@ -1,15 +1,20 @@
 (() => {
   const STORAGE_KEY = "geminiFolders";
   const ROOT_ID = "gfo-folders-root";
+  const QUICK_ADD_BUTTON_ID = "gfo-quick-add";
+  const QUICK_ADD_MENU_ID = "gfo-quick-add-menu";
   const collapsedFolderIds = new Set();
   let activeFoldersRoot = null;
   let activeFoldersList = null;
-  let nativeChatObserver = null;
   let sidebarObserver = null;
+  let mainHeaderObserver = null;
   let activeChatContext = null;
   let folderContextMenu = null;
   let folderContextMenuOutsideHandler = null;
   let folderContextMenuBound = false;
+  let quickAddMenu = null;
+  let quickAddMenuOutsideHandler = null;
+  let quickAddEnsureScheduled = false;
   let isContextAlive = true;
 
   function isExtensionContextInvalidated(error) {
@@ -37,7 +42,13 @@
       sidebarObserver = null;
     }
 
+    if (mainHeaderObserver) {
+      mainHeaderObserver.disconnect();
+      mainHeaderObserver = null;
+    }
+
     closeFolderContextMenu();
+    closeQuickAddMenu();
   }
 
   function warnIfUnexpected(error, scope) {
@@ -323,8 +334,83 @@
     return `/app/${chatId}`;
   }
 
-  function navigateToChat(chatId) {
-    window.open(getChatUrl(chatId), "_self");
+  function getCurrentChatIdFromPath() {
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    const chatId = parts.pop() || "";
+
+    if (!chatId || chatId === "app") {
+      return null;
+    }
+
+    return chatId;
+  }
+
+  function getSelectedSidebarChatTitle() {
+    const selectedLink =
+      document.querySelector('a[data-test-id="conversation"][aria-current="page"]') ||
+      document.querySelector("side-nav-entry-button.selected a[data-test-id=\"conversation\"]") ||
+      document.querySelector("a[data-test-id=\"conversation\"].selected");
+
+    if (!selectedLink) {
+      return "";
+    }
+
+    return getChatDisplayTitleFromLink(selectedLink);
+  }
+
+  function getCurrentChatTitle() {
+    const heading = document.querySelector("main h1");
+    const headingText = (heading?.textContent || "").trim();
+    if (headingText) {
+      return headingText;
+    }
+
+    const sidebarTitle = getSelectedSidebarChatTitle();
+    if (sidebarTitle) {
+      return sidebarTitle;
+    }
+
+    return "Untitled Chat";
+  }
+
+  function getNativeChatLinkById(chatId) {
+    const nativeLink = document.querySelector(`a[data-test-id="conversation"][href*="${chatId}"]`);
+    if (nativeLink) {
+      return nativeLink;
+    }
+
+    const links = Array.from(document.querySelectorAll(`a[href*="${chatId}"]`));
+    return links.find((link) => !link.closest(`#${ROOT_ID}`)) || null;
+  }
+
+  function markCustomChatItemSelected(chatId) {
+    if (!activeFoldersRoot) {
+      return;
+    }
+
+    activeFoldersRoot.querySelectorAll(".gfo-folder-chat-item.selected").forEach((item) => {
+      item.classList.remove("selected");
+    });
+
+    const selected = activeFoldersRoot.querySelector(`.gfo-folder-chat-item[data-chat-id="${chatId}"]`);
+    if (selected) {
+      selected.classList.add("selected");
+    }
+  }
+
+  function handleCustomChatItemClick(event, chatId) {
+    const nativeLink = getNativeChatLinkById(chatId);
+
+    // Soft navigation when Gemini already has this chat link in the sidebar DOM.
+    if (nativeLink) {
+      event.preventDefault();
+      nativeLink.click();
+      markCustomChatItemSelected(chatId);
+      return;
+    }
+
+    // Hard navigation fallback for chats not currently materialized by Gemini.
+    window.location.href = getChatUrl(chatId);
   }
 
   function closeFolderContextMenu() {
@@ -339,6 +425,18 @@
     }
 
     activeChatContext = null;
+  }
+
+  function closeQuickAddMenu() {
+    if (quickAddMenu) {
+      quickAddMenu.remove();
+      quickAddMenu = null;
+    }
+
+    if (quickAddMenuOutsideHandler) {
+      document.removeEventListener("pointerdown", quickAddMenuOutsideHandler, true);
+      quickAddMenuOutsideHandler = null;
+    }
   }
 
   async function assignChatToFolder(chatContext, folderId) {
@@ -377,6 +475,209 @@
     return saveFolderState({
       ...state,
       chatToFolderMap: nextMap
+    });
+  }
+
+  async function saveCurrentChatToFolder(folderId) {
+    const chatId = getCurrentChatIdFromPath();
+    if (!chatId || !folderId) {
+      return false;
+    }
+
+    const state = await loadFolderState();
+    const nextMap = { ...(state.chatToFolderMap || {}) };
+
+    nextMap[chatId] = {
+      folderID: folderId,
+      title: getCurrentChatTitle()
+    };
+
+    return saveFolderState({
+      ...state,
+      chatToFolderMap: nextMap
+    });
+  }
+
+  function findHeaderActionGroup() {
+    const candidates = [
+      'main [role="toolbar"]',
+      'main [aria-label*="actions" i]',
+      'main .actions',
+      'main .header-actions',
+      'main .top-right-actions'
+    ];
+
+    for (const selector of candidates) {
+      const node = document.querySelector(selector);
+      if (node && !node.closest(`#${ROOT_ID}`)) {
+        return node;
+      }
+    }
+
+    const shareLikeButton = document.querySelector(
+      'main button[aria-label*="Share" i], main button[aria-label*="Spark" i], main button[aria-label*="Copy" i]'
+    );
+
+    if (shareLikeButton?.parentElement && !shareLikeButton.parentElement.closest(`#${ROOT_ID}`)) {
+      return shareLikeButton.parentElement;
+    }
+
+    return null;
+  }
+
+  async function openQuickAddMenu(anchorButton) {
+    closeQuickAddMenu();
+
+    const state = await loadFolderState();
+    const folders = flattenFolderTree(state.folders);
+    const chatId = getCurrentChatIdFromPath();
+
+    const menu = document.createElement("div");
+    menu.id = QUICK_ADD_MENU_ID;
+    menu.className = "gfo-quick-add-menu";
+
+    const header = document.createElement("div");
+    header.className = "gfo-quick-add-menu-header";
+    header.textContent = "Add current chat to folder";
+    menu.appendChild(header);
+
+    if (!chatId) {
+      const empty = document.createElement("div");
+      empty.className = "gfo-quick-add-menu-empty";
+      empty.textContent = "Open a chat first";
+      menu.appendChild(empty);
+    } else if (!folders.length) {
+      const empty = document.createElement("div");
+      empty.className = "gfo-quick-add-menu-empty";
+      empty.textContent = "No folders available";
+      menu.appendChild(empty);
+    } else {
+      folders.forEach((folder) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "gfo-quick-add-menu-item";
+        item.style.paddingLeft = `${12 + folder.depth * 14}px`;
+        item.textContent = folder.name;
+
+        item.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          fireAndForget(
+            (async () => {
+              const saved = await saveCurrentChatToFolder(folder.id);
+              if (saved) {
+                await refreshFolderUI();
+                closeQuickAddMenu();
+              }
+            })(),
+            "saveCurrentChatToFolder failed"
+          );
+        });
+
+        menu.appendChild(item);
+      });
+    }
+
+    document.body.appendChild(menu);
+
+    const rect = anchorButton.getBoundingClientRect();
+    const left = Math.min(window.innerWidth - menu.offsetWidth - 8, Math.max(8, rect.left));
+    const top = Math.min(window.innerHeight - menu.offsetHeight - 8, rect.bottom + 6);
+
+    menu.style.left = `${Math.max(8, left)}px`;
+    menu.style.top = `${Math.max(8, top)}px`;
+
+    quickAddMenu = menu;
+
+    quickAddMenuOutsideHandler = (event) => {
+      if (quickAddMenu && quickAddMenu.contains(event.target)) {
+        return;
+      }
+
+      if (anchorButton.contains(event.target)) {
+        return;
+      }
+
+      closeQuickAddMenu();
+    };
+
+    document.addEventListener("pointerdown", quickAddMenuOutsideHandler, true);
+  }
+
+  function ensureQuickAddButton() {
+    if (!isContextAlive) {
+      return;
+    }
+
+    const actionGroup = findHeaderActionGroup();
+    if (!actionGroup) {
+      return;
+    }
+
+    let button = document.getElementById(QUICK_ADD_BUTTON_ID);
+
+    if (!button) {
+      button = document.createElement("button");
+      button.id = QUICK_ADD_BUTTON_ID;
+      button.type = "button";
+      button.className = "gfo-quick-add";
+      button.setAttribute("aria-label", "Add current chat to folder");
+      button.textContent = "\ud83d\udcc1";
+
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        fireAndForget(openQuickAddMenu(button), "openQuickAddMenu failed");
+      });
+    }
+
+    if (button.parentElement !== actionGroup) {
+      actionGroup.appendChild(button);
+    }
+  }
+
+  function scheduleEnsureQuickAddButton() {
+    if (quickAddEnsureScheduled) {
+      return;
+    }
+
+    quickAddEnsureScheduled = true;
+
+    requestAnimationFrame(() => {
+      quickAddEnsureScheduled = false;
+      ensureQuickAddButton();
+    });
+  }
+
+  function observeMainHeaderArea() {
+    if (!isContextAlive) {
+      return;
+    }
+
+    const target = document.querySelector("main") || document.body;
+    if (!target) {
+      return;
+    }
+
+    if (mainHeaderObserver) {
+      mainHeaderObserver.disconnect();
+      mainHeaderObserver = null;
+    }
+
+    ensureQuickAddButton();
+
+    mainHeaderObserver = new MutationObserver(() => {
+      if (!isContextAlive || !mainHeaderObserver) {
+        return;
+      }
+
+      scheduleEnsureQuickAddButton();
+    });
+
+    mainHeaderObserver.observe(target, {
+      childList: true,
+      subtree: true
     });
   }
 
@@ -849,17 +1150,17 @@
       chatList.className = "gfo-folder-chat-list";
 
       assignedChats.forEach((chat) => {
-        const chatButton = document.createElement("button");
-        chatButton.type = "button";
+        const chatButton = document.createElement("a");
         chatButton.className = "gfo-folder-chat-item";
         chatButton.dataset.chatId = chat.chatId;
         chatButton.dataset.chatTitle = chat.title;
         chatButton.textContent = chat.title;
+        chatButton.href = getChatUrl(chat.chatId);
         chatButton.setAttribute("aria-label", `Open ${chat.title}`);
         chatButton.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
-          navigateToChat(chat.chatId);
+          handleCustomChatItemClick(event, chat.chatId);
         });
 
         chatList.appendChild(chatButton);
@@ -1066,6 +1367,7 @@
       }
 
       bindFolderContextMenuListener();
+      scheduleEnsureQuickAddButton();
       tryInject();
     });
 
@@ -1109,6 +1411,8 @@
     const init = () => {
       setTimeout(() => {
         observeGeminiSidebar();
+        observeMainHeaderArea();
+        ensureQuickAddButton();
       }, 1000);
     };
 
