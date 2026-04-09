@@ -6,13 +6,19 @@
   "permissions": ["storage", "scripting", "tabs"],
   "host_permissions": ["https://gemini.google.com/*"],
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "backup/popup.html"
   },
   "content_scripts": [
     {
       "matches": ["https://gemini.google.com/*"],
-      "js": ["content.js"],
-      "css": ["styles.css"],
+      "js": [
+        "js/utils.js",
+        "js/storage.js",
+        "js/ui-components.js",
+        "js/navigation.js",
+        "js/main.js"
+      ],
+      "css": ["styles/content.css"],
       "run_at": "document_idle"
     }
   ]

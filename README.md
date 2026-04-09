@@ -15,12 +15,83 @@ A Manifest V3 Chrome extension that adds a custom folder organizer to the Gemini
 - Auto cleanup of chat mappings when folders are deleted
 - Selection sync: highlights custom folder chat that matches current URL
 
-## Project Files
+## Screenshots
 
-- `manifest.json`: extension metadata, permissions, and content script wiring
-- `content.js`: all runtime logic, DOM injection, storage, observers, and interaction handlers
-- `styles.css`: all extension UI styling
-- `popup.html` and `popup.js`: browser toolbar popup for export and import backups
+### Folder Sidebar
+
+![Folder sidebar with nested folders](images/Folders.png)
+
+### Context Menu Assignment
+
+![Context menu flow to add or remove a chat from folders](images/add chat to folder.png)
+
+### Quick Add Menu
+
+![Quick Add menu for assigning current chat to folders](images/quick add.png)
+
+
+### Backup and Restore Popup
+
+![Popup for exporting and importing backups](images/backup.png)
+
+## Project Structure
+
+This extension is modularized for maintainability and public release:
+
+### Root Files
+
+- **manifest.json**: Extension metadata, permissions, and script loading order
+- **.gitignore**: Git ignore patterns for OS junk and IDE settings
+- **LICENSE**: MIT license for open-source distribution
+- **README.md**: Full documentation and contribution guidelines
+
+### JavaScript Modules (js/ directory)
+
+Loaded in dependency order by manifest.json:
+
+1. **js/utils.js**: Core utilities
+   - User ID detection (DOM, WIZ_global_data, profile picture)
+   - String hashing and normalization
+   - Title extraction and validation
+   - Error context checking
+
+2. **js/storage.js**: Storage management
+   - Per-user storage key generation
+   - Folder state loading/saving
+   - Data normalization and migration
+   - Chat-to-folder mapping utilities
+
+3. **js/ui-components.js**: UI rendering
+   - Folder tree rendering
+   - DOM element creation
+   - Sidebar injection
+   - State synchronization
+   - Icon markup generation
+
+4. **js/navigation.js**: Chat navigation
+   - Chat URL and title extraction
+   - Custom chat item selection
+   - Native chat link interaction
+   - Current chat context detection
+
+5. **js/main.js**: Entry point and orchestration
+   - Global state management
+   - MutationObserver setup for sidebar and header
+   - Folder CRUD operations (create, delete, organize)
+   - Quick Add menu and context menu handling
+   - Startup sequence and error handling
+   - Message listener for popup refresh
+
+### Styles (styles/ directory)
+
+- **styles/content.css**: All UI styling for sidebar folders and controls
+
+### Popup (backup/ directory)
+
+Directory for export/import popup functionality:
+
+- **backup/popup.html**: Dark-themed popup UI
+- **backup/popup.js**: Export/import logic with validation
 
 ## Installation (Load Unpacked)
 
@@ -116,20 +187,20 @@ Use the extension icon in the browser toolbar to open the popup.
 
 ### Folder state icon colors
 
-In `styles.css`, inside `#gfo-folders-root.gfo-root`:
+In `styles/content.css`, inside `#gfo-folders-root.gfo-root`:
 
 - `--gfo-folder-icon-closed-color`
 - `--gfo-folder-icon-open-color`
 
 ### Quick Add icon color (dark mode)
 
-In `styles.css`, edit:
+In `styles/content.css`, edit:
 
 - `#gfo-quick-add.gfo-quick-add { color: ... }`
 
 ### Folder list max height
 
-In `styles.css`, edit:
+In `styles/content.css`, edit:
 
 - `.gfo-list { max-height: 350px; }`
 
@@ -144,6 +215,66 @@ In `styles.css`, edit:
 - Gemini DOM selectors can change over time
 - Header Quick Add injection depends on matching Gemini action group selectors
 - Chat title extraction is heuristic-based and falls back when needed
+
+## How to Contribute
+
+We welcome community contributions! Here's how you can help:
+
+### Reporting Issues
+
+If you find a bug or have a feature request:
+
+1. Check existing [GitHub Issues](https://github.com/jayakody/Gemini-Folder-Extenstion/issues) to avoid duplicates
+2. Create a new issue with:
+   - Clear title and description
+   - Steps to reproduce (if applicable)
+   - Expected vs. actual behavior
+   - Browser version and extension version
+
+### Code Contributions
+
+1. **Fork** the repository
+2. **Create a feature branch**: `git checkout -b feature/your-feature-name`
+3. **Make your changes**:
+   - Keep code modular and focused
+   - Follow the existing code style (IIFEs, namespaced functions under `GF`)
+   - Remove `console.log` statements before submitting
+   - Test on `https://gemini.google.com`
+4. **Commit with clear messages**: `git commit -m "Add: descriptive message"`
+5. **Push to your branch**: `git push origin feature/your-feature-name`
+6. **Create a Pull Request** with description of changes
+
+### Development Setup
+
+```bash
+git clone https://github.com/jayakody/Gemini-Folder-Extenstion.git
+cd Gemini-Folder-Extenstion
+# Load unpacked in chrome://extensions
+```
+
+### Testing Your Changes
+
+1. Make changes in the `js/` directory or other source files
+2. Reload the extension in `chrome://extensions`
+3. Test on `https://gemini.google.com`
+4. Verify no console errors (F12 > Console)
+
+### Selector Maintenance
+
+If Gemini's DOM structure changes and selectors break:
+
+1. Update selectors in the relevant `js/` module
+2. Add fallback selectors when possible
+3. Document the change in your PR with a note about which Gemini version was tested
+4. Consider adding a comment explaining the selector's purpose
+
+### Style Guidelines
+
+- Use meaningful variable names
+- Group related functions in the same module
+- Add comments for complex logic
+- Keep functions focused and testable
+- Use async/await for Promise-based operations
 
 ## Version
 
