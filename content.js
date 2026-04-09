@@ -4,6 +4,9 @@
   const QUICK_ADD_BUTTON_ID = "gfo-quick-add";
   const QUICK_ADD_MENU_ID = "gfo-quick-add-menu";
   const expandedFolderIds = new Set();
+  let currentUserId = null;
+  let currentStorageKey = STORAGE_KEY;
+  let userContextRefreshScheduled = false;
   let activeFoldersRoot = null;
   let activeFoldersList = null;
   let sidebarObserver = null;
@@ -66,6 +69,223 @@
     promise.catch((error) => {
       warnIfUnexpected(error, scope);
     });
+  }
+
+  function hashStringToId(value) {
+    let hash = 2166136261;
+    const input = String(value || "");
+
+    for (let index = 0; index < input.length; index += 1) {
+      hash ^= input.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+
+    return `h${(hash >>> 0).toString(16)}`;
+  }
+
+  function getProfilePictureUrl() {
+    const selectors = [
+      'img[alt*="profile" i]',
+      'img[aria-label*="profile" i]',
+      'img[alt*="account" i]',
+      'img[src*="googleusercontent" i]',
+      'img[src*="gstatic" i]',
+      'button[aria-label*="profile" i] img',
+      'button[aria-label*="account" i] img',
+      '[data-test-id*="profile" i] img',
+      '[data-test-id*="account" i] img'
+    ];
+
+    for (const selector of selectors) {
+      const image = document.querySelector(selector);
+      const candidate = image?.currentSrc || image?.src || image?.getAttribute("src") || "";
+      if (candidate) {
+        return candidate;
+      }
+    }
+
+    const avatarNodes = Array.from(document.querySelectorAll("button, a, div, span")).filter((node) => {
+      const label = `${node.getAttribute("aria-label") || ""} ${node.title || ""}`.toLowerCase();
+      return label.includes("profile") || label.includes("account");
+    });
+
+    for (const node of avatarNodes) {
+      const style = node.getAttribute("style") || "";
+      const match = style.match(/url\((['\"]?)(.*?)\1\)/i);
+      if (match?.[2]) {
+        return match[2];
+      }
+    }
+
+    return "";
+  }
+
+  function extractEmailLikeValue(value) {
+    const text = String(value || "").trim();
+    return /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(text) ? text : "";
+  }
+
+  function searchWizGlobalData(node, seen = new Set(), depth = 0) {
+    if (!node || depth > 5) {
+      return "";
+    }
+
+    if (typeof node === "string") {
+      return extractEmailLikeValue(node);
+    }
+
+    if (typeof node !== "object") {
+      return "";
+    }
+
+    if (seen.has(node)) {
+      return "";
+    }
+
+    seen.add(node);
+
+    for (const [key, value] of Object.entries(node)) {
+      const keyLower = key.toLowerCase();
+
+      if (typeof value === "string") {
+        const emailCandidate = extractEmailLikeValue(value);
+        if (emailCandidate) {
+          return emailCandidate.toLowerCase();
+        }
+
+        if ((keyLower.includes("email") || keyLower.includes("userid") || keyLower === "id") && value.trim()) {
+          return value.trim();
+        }
+      }
+
+      if (value && typeof value === "object") {
+        const nested = searchWizGlobalData(value, seen, depth + 1);
+        if (nested) {
+          return nested;
+        }
+      }
+    }
+
+    return "";
+  }
+
+  function getUserIdFromWizGlobalData() {
+    try {
+      const wizData = window.WIZ_global_data;
+      if (!wizData) {
+        return "";
+      }
+
+      return searchWizGlobalData(wizData);
+    } catch {
+      return "";
+    }
+  }
+
+  function getUserIdFromDom() {
+    const selectors = [
+      'button[aria-label*="profile" i]',
+      'button[aria-label*="account" i]',
+      'button[aria-label*="settings" i]',
+      '[data-test-id*="profile" i]',
+      '[data-test-id*="account" i]',
+      '[data-test-id*="settings" i]'
+    ];
+
+    for (const selector of selectors) {
+      const node = document.querySelector(selector);
+      if (!node) {
+        continue;
+      }
+
+      const candidate = [node.getAttribute("aria-label"), node.title, node.textContent]
+        .map((item) => String(item || "").trim())
+        .find(Boolean);
+
+      const emailCandidate = extractEmailLikeValue(candidate);
+      if (emailCandidate) {
+        return emailCandidate.toLowerCase();
+      }
+
+      if (candidate && !/\s/.test(candidate) && /^(?=.*[0-9]|.*[_@.-])[A-Za-z0-9._-]{8,}$/.test(candidate)) {
+        return candidate;
+      }
+    }
+
+    return "";
+  }
+
+  function getUserIdFromProfilePicture() {
+    const profilePictureUrl = getProfilePictureUrl();
+    if (!profilePictureUrl) {
+      return "";
+    }
+
+    return `profile_${hashStringToId(profilePictureUrl)}`;
+  }
+
+  function getUserId() {
+    const domUserId = getUserIdFromDom();
+    if (domUserId) {
+      return domUserId;
+    }
+
+    const wizUserId = getUserIdFromWizGlobalData();
+    if (wizUserId) {
+      return wizUserId;
+    }
+
+    return getUserIdFromProfilePicture();
+  }
+
+  function getStorageKey(userId = getUserId()) {
+    return userId ? `${STORAGE_KEY}_${encodeURIComponent(String(userId))}` : STORAGE_KEY;
+  }
+
+  function scheduleUserContextRefresh() {
+    if (userContextRefreshScheduled || !activeFoldersRoot || !activeFoldersList) {
+      return;
+    }
+
+    userContextRefreshScheduled = true;
+
+    fireAndForget(
+      (async () => {
+        try {
+          if (!isContextAlive) {
+            return;
+          }
+
+          await refreshFolderUI();
+        } finally {
+          userContextRefreshScheduled = false;
+        }
+      })(),
+      "refreshFolderUI after user switch failed"
+    );
+  }
+
+  function syncUserContext() {
+    const nextUserId = getUserId() || "";
+    const nextStorageKey = getStorageKey(nextUserId);
+
+    if (nextUserId === currentUserId && nextStorageKey === currentStorageKey) {
+      return false;
+    }
+
+    currentUserId = nextUserId;
+    currentStorageKey = nextStorageKey;
+    expandedFolderIds.clear();
+
+    closeFolderContextMenu();
+    closeQuickAddMenu();
+
+    if (activeFoldersList) {
+      activeFoldersList.innerHTML = "";
+    }
+
+    scheduleUserContextRefresh();
+    return true;
   }
 
   function createFolderId() {
@@ -236,9 +456,12 @@
       return normalizeState(undefined);
     }
 
+    syncUserContext();
+
     try {
-      const result = await chrome.storage.local.get(STORAGE_KEY);
-      const rawState = result[STORAGE_KEY];
+      const storageKey = currentStorageKey || getStorageKey();
+      const result = await chrome.storage.local.get(storageKey);
+      const rawState = result[storageKey];
       const state = normalizeState(rawState);
 
       if (folderTreeNeedsMigration(rawState?.folders ?? rawState) || chatMappingsNeedMigration(rawState)) {
@@ -262,8 +485,11 @@
       return false;
     }
 
+    syncUserContext();
+
     try {
-      await chrome.storage.local.set({ [STORAGE_KEY]: state });
+      const storageKey = currentStorageKey || getStorageKey();
+      await chrome.storage.local.set({ [storageKey]: state });
       return true;
     } catch (error) {
       warnIfUnexpected(error, "saveFolderState failed");
@@ -846,6 +1072,8 @@
       return;
     }
 
+    syncUserContext();
+
     const target = document.querySelector("main") || document.body;
     if (!target) {
       return;
@@ -863,6 +1091,7 @@
         return;
       }
 
+      syncUserContext();
       scheduleEnsureQuickAddButton();
     });
 
@@ -1592,6 +1821,8 @@
         return;
       }
 
+      syncUserContext();
+
       if (document.getElementById(ROOT_ID)) {
         return;
       }
@@ -1614,6 +1845,7 @@
         return;
       }
 
+      syncUserContext();
       bindFolderContextMenuListener();
       scheduleEnsureQuickAddButton();
       syncSelectedCustomChatFromCurrentPath();
@@ -1656,12 +1888,16 @@
 
     window.addEventListener("unhandledrejection", handleUnhandledRejection);
     window.addEventListener("error", handleGlobalError);
+    window.addEventListener("focus", () => {
+      syncUserContext();
+    });
     window.addEventListener("popstate", () => {
       syncSelectedCustomChatFromCurrentPath();
     });
 
     const init = () => {
       setTimeout(() => {
+        syncUserContext();
         observeGeminiSidebar();
         observeMainHeaderArea();
         ensureQuickAddButton();
@@ -1675,6 +1911,16 @@
     }
 
     window.addEventListener("load", init, { once: true });
+  }
+
+  if (chrome?.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (!message || message.action !== "refreshUI") {
+        return;
+      }
+
+      fireAndForget(refreshFolderUI(), "refreshFolderUI message failed");
+    });
   }
 
   startWhenReady();

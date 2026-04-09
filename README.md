@@ -20,6 +20,7 @@ A Manifest V3 Chrome extension that adds a custom folder organizer to the Gemini
 - `manifest.json`: extension metadata, permissions, and content script wiring
 - `content.js`: all runtime logic, DOM injection, storage, observers, and interaction handlers
 - `styles.css`: all extension UI styling
+- `popup.html` and `popup.js`: browser toolbar popup for export and import backups
 
 ## Installation (Load Unpacked)
 
@@ -38,6 +39,8 @@ A Manifest V3 Chrome extension that adds a custom folder organizer to the Gemini
 ## Data Model (chrome.storage.local)
 
 Storage key: `geminiFolders`
+
+When Gemini exposes a usable account identifier, the extension stores data under a per-user key such as `geminiFolders_<userId>`.
 
 Structure:
 
@@ -101,6 +104,13 @@ Option B (sidebar):
 
 - Deleting a folder also deletes its sub-folders
 - Any chat mappings that point to deleted folders are removed automatically
+
+## Backup And Restore
+
+Use the extension icon in the browser toolbar to open the popup.
+
+- `Export Backup` downloads a JSON backup for the current Gemini account
+- `Import Backup` loads a JSON backup into the current Gemini account and refreshes the sidebar immediately
 
 ## Visual Customization
 

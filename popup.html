@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gemini Folders</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #1f1f1f;
+        --panel: #262626;
+        --panel-2: #2e2e2e;
+        --text: #e8eaed;
+        --muted: #9aa0a6;
+        --border: #3a3a3a;
+        --accent: #8ab4f8;
+      }
+
+      html, body {
+        margin: 0;
+        width: 100%;
+        min-width: 320px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Google Sans", "Segoe UI", sans-serif;
+      }
+
+      body {
+        box-sizing: border-box;
+        padding: 14px;
+      }
+
+      .popup {
+        width: 100%;
+        min-width: 280px;
+      }
+
+      .title {
+        margin: 0 0 6px;
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+      }
+
+      .subtitle {
+        margin: 0 0 14px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+
+      .actions {
+        display: grid;
+        gap: 10px;
+      }
+
+      button {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        color: var(--text);
+        border-radius: 10px;
+        min-height: 40px;
+        padding: 0 14px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+      }
+
+      button:hover {
+        background: var(--panel-2);
+        border-color: rgba(138, 180, 248, 0.35);
+      }
+
+      button:active {
+        transform: translateY(1px);
+      }
+
+      .status {
+        margin-top: 12px;
+        min-height: 18px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+        word-break: break-word;
+      }
+
+      .status.error {
+        color: #ffb4ab;
+      }
+
+      .status.success {
+        color: #9ad1ff;
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="popup">
+      <h1 class="title">Gemini Folders</h1>
+      <p class="subtitle">Backup and restore your folder data for the current Gemini account.</p>
+
+      <div class="actions">
+        <button id="export-button" type="button">Export Backup</button>
+        <button id="import-button" type="button">Import Backup</button>
+        <input id="import-input" class="hidden" type="file" accept="application/json,.json" />
+      </div>
+
+      <div id="status" class="status" aria-live="polite"></div>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -3,8 +3,11 @@
   "name": "Gemini Folders",
   "version": "1.0.0",
   "description": "Adds a folder organizer to the Gemini sidebar.",
-  "permissions": ["storage", "scripting"],
+  "permissions": ["storage", "scripting", "tabs"],
   "host_permissions": ["https://gemini.google.com/*"],
+  "action": {
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
       "matches": ["https://gemini.google.com/*"],
