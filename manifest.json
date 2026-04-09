@@ -5,8 +5,17 @@
   "description": "Adds a folder organizer to the Gemini sidebar.",
   "permissions": ["storage", "scripting", "tabs"],
   "host_permissions": ["https://gemini.google.com/*"],
+  "icons": {
+    "16": "images/icon-16.png",
+    "48": "images/icon-48.png",
+    "128": "images/icon-128.png"
+  },
   "action": {
-    "default_popup": "backup/popup.html"
+    "default_popup": "backup/popup.html",
+    "default_icon": {
+      "16": "images/icon-16.png",
+      "48": "images/icon-48.png"
+    }
   },
   "content_scripts": [
     {

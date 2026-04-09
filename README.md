@@ -140,6 +140,10 @@ Notes:
 - `folderIDs` is always an array.
 - Old single-folder entries are migrated automatically on load.
 
+## Privacy
+
+This extension stores all folder data and chat mappings locally on your device using chrome.storage.local. No data is ever transmitted to the developer or any third-party servers.
+
 ## How To Use
 
 ### Create folders
