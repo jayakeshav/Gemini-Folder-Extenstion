@@ -132,7 +132,7 @@
   function normalizeChatMappingEntry(value) {
     if (typeof value === "string") {
       return {
-        folderID: value,
+        folderIDs: [value],
         title: ""
       };
     }
@@ -141,19 +141,20 @@
       return null;
     }
 
-    const folderID =
-      typeof value.folderID === "string" && value.folderID
-        ? value.folderID
+    const folderIDs = Array.isArray(value.folderIDs)
+      ? value.folderIDs.filter((folderID) => typeof folderID === "string" && folderID)
+      : typeof value.folderID === "string" && value.folderID
+        ? [value.folderID]
         : typeof value.folderId === "string" && value.folderId
-          ? value.folderId
-          : "";
+          ? [value.folderId]
+          : [];
 
-    if (!folderID) {
+    if (!folderIDs.length) {
       return null;
     }
 
     return {
-      folderID,
+      folderIDs: Array.from(new Set(folderIDs)),
       title: typeof value.title === "string" ? value.title.trim() : ""
     };
   }
@@ -208,7 +209,11 @@
     }
 
     return Object.values(sourceMap || {}).some((entry) => {
-      return !isPlainObject(entry) || typeof entry.folderID !== "string" || !entry.folderID || typeof entry.title !== "string";
+      return (
+        !isPlainObject(entry) ||
+        !Array.isArray(entry.folderIDs) ||
+        typeof entry.title !== "string"
+      );
     });
   }
 
@@ -296,7 +301,7 @@
 
   function getChatsForFolder(folderId, chatToFolderMap) {
     return Object.entries(chatToFolderMap || {})
-      .filter(([, entry]) => entry && entry.folderID === folderId)
+      .filter(([, entry]) => Array.isArray(entry?.folderIDs) && entry.folderIDs.includes(folderId))
       .map(([chatId, entry]) => ({
         chatId,
         title: entry.title || "Untitled Chat"
@@ -526,6 +531,34 @@
     }
   }
 
+  function getFolderIDsForChatEntry(entry) {
+    if (!entry) {
+      return [];
+    }
+
+    if (Array.isArray(entry.folderIDs)) {
+      return entry.folderIDs.filter((folderID) => typeof folderID === "string" && folderID);
+    }
+
+    if (typeof entry.folderID === "string" && entry.folderID) {
+      return [entry.folderID];
+    }
+
+    if (typeof entry.folderId === "string" && entry.folderId) {
+      return [entry.folderId];
+    }
+
+    return [];
+  }
+
+  function getChatFolderState(chatToFolderMap, chatId) {
+    const entry = normalizeChatMappingEntry(chatToFolderMap?.[chatId]);
+    return {
+      entry,
+      folderIDs: getFolderIDsForChatEntry(entry)
+    };
+  }
+
   async function assignChatToFolder(chatContext, folderId) {
     if (!chatContext || !chatContext.chatId || !folderId) {
       return false;
@@ -533,9 +566,10 @@
 
     const state = await loadFolderState();
     const nextMap = { ...(state.chatToFolderMap || {}) };
+    const currentFolderIDs = getFolderIDsForChatEntry(nextMap[chatContext.chatId]);
 
     nextMap[chatContext.chatId] = {
-      folderID: folderId,
+      folderIDs: Array.from(new Set([...currentFolderIDs, folderId])),
       title: chatContext.title || "Untitled Chat"
     };
 
@@ -545,19 +579,31 @@
     });
   }
 
-  async function removeChatFromFolder(chatId) {
+  async function removeChatFromFolder(chatId, folderId = null) {
     if (!chatId) {
       return false;
     }
 
     const state = await loadFolderState();
     const nextMap = { ...(state.chatToFolderMap || {}) };
+    const currentEntry = normalizeChatMappingEntry(nextMap[chatId]);
 
-    if (!(chatId in nextMap)) {
+    if (!currentEntry) {
       return true;
     }
 
-    delete nextMap[chatId];
+    const nextFolderIDs = folderId
+      ? currentEntry.folderIDs.filter((existingFolderId) => existingFolderId !== folderId)
+      : [];
+
+    if (!nextFolderIDs.length) {
+      delete nextMap[chatId];
+    } else {
+      nextMap[chatId] = {
+        folderIDs: nextFolderIDs,
+        title: currentEntry.title || "Untitled Chat"
+      };
+    }
 
     return saveFolderState({
       ...state,
@@ -573,9 +619,10 @@
 
     const state = await loadFolderState();
     const nextMap = { ...(state.chatToFolderMap || {}) };
+    const currentFolderIDs = getFolderIDsForChatEntry(nextMap[chatId]);
 
     nextMap[chatId] = {
-      folderID: folderId,
+      folderIDs: Array.from(new Set([...currentFolderIDs, folderId])),
       title: getCurrentChatTitle()
     };
 
@@ -618,6 +665,8 @@
     const state = await loadFolderState();
     const folders = flattenFolderTree(state.folders);
     const chatId = getCurrentChatIdFromPath();
+    const chatState = getChatFolderState(state.chatToFolderMap, chatId);
+    const folderIDSet = new Set(chatState.folderIDs);
 
     const menu = document.createElement("div");
     menu.id = QUICK_ADD_MENU_ID;
@@ -643,8 +692,20 @@
         const item = document.createElement("button");
         item.type = "button";
         item.className = "gfo-quick-add-menu-item";
+        item.classList.toggle("is-selected", folderIDSet.has(folder.id));
+        item.dataset.folderId = folder.id;
         item.style.paddingLeft = `${12 + folder.depth * 14}px`;
-        item.textContent = folder.name;
+
+        const checkmark = document.createElement("span");
+        checkmark.className = "gfo-quick-add-menu-check";
+        checkmark.textContent = folderIDSet.has(folder.id) ? "✓" : "";
+        checkmark.setAttribute("aria-hidden", "true");
+
+        const label = document.createElement("span");
+        label.className = "gfo-quick-add-menu-label";
+        label.textContent = folder.name;
+
+        item.append(checkmark, label);
 
         item.addEventListener("click", (event) => {
           event.preventDefault();
@@ -652,13 +713,15 @@
 
           fireAndForget(
             (async () => {
-              const saved = await saveCurrentChatToFolder(folder.id);
+              const saved = folderIDSet.has(folder.id)
+                ? await removeChatFromFolder(chatId, folder.id)
+                : await saveCurrentChatToFolder(folder.id);
               if (saved) {
                 await refreshFolderUI();
-                closeQuickAddMenu();
+                openQuickAddMenu(anchorButton);
               }
             })(),
-            "saveCurrentChatToFolder failed"
+            "toggle quick add folder failed"
           );
         });
 
@@ -784,7 +847,9 @@
 
     const state = await loadFolderState();
     const folders = flattenFolderTree(state.folders);
-    const mappedEntry = normalizeChatMappingEntry((state.chatToFolderMap || {})[chatContext.chatId]);
+    const chatState = getChatFolderState(state.chatToFolderMap, chatContext.chatId);
+    const mappedEntry = chatState.entry;
+    const folderIDSet = new Set(chatState.folderIDs);
 
     const menu = document.createElement("div");
     menu.id = "gfo-folder-context-menu";
@@ -799,13 +864,13 @@
     removeItem.type = "button";
     removeItem.className = "gfo-folder-context-menu-item gfo-folder-context-menu-item-remove";
     removeItem.textContent = "Remove from folder";
-    removeItem.disabled = !mappedEntry;
+    removeItem.disabled = !mappedEntry || !chatContext.folderId;
     removeItem.addEventListener("click", (clickEvent) => {
       clickEvent.preventDefault();
       clickEvent.stopPropagation();
       fireAndForget(
         (async () => {
-          const saved = await removeChatFromFolder(chatContext.chatId);
+          const saved = await removeChatFromFolder(chatContext.chatId, chatContext.folderId);
           if (saved) {
             await refreshFolderUI();
             closeFolderContextMenu();
@@ -826,21 +891,35 @@
         const item = document.createElement("button");
         item.type = "button";
         item.className = "gfo-folder-context-menu-item";
+        item.classList.toggle("is-selected", folderIDSet.has(folder.id));
+        item.dataset.folderId = folder.id;
         item.style.paddingLeft = `${12 + folder.depth * 14}px`;
-        item.textContent = folder.name;
+
+        const checkmark = document.createElement("span");
+        checkmark.className = "gfo-folder-context-menu-check";
+        checkmark.textContent = folderIDSet.has(folder.id) ? "✓" : "";
+        checkmark.setAttribute("aria-hidden", "true");
+
+        const label = document.createElement("span");
+        label.className = "gfo-folder-context-menu-label";
+        label.textContent = folder.name;
+
+        item.append(checkmark, label);
 
         item.addEventListener("click", (clickEvent) => {
           clickEvent.preventDefault();
           clickEvent.stopPropagation();
           fireAndForget(
             (async () => {
-              const saved = await assignChatToFolder(chatContext, folder.id);
+              const saved = folderIDSet.has(folder.id)
+                ? await removeChatFromFolder(chatContext.chatId, folder.id)
+                : await assignChatToFolder(chatContext, folder.id);
               if (saved) {
                 await refreshFolderUI();
-                closeFolderContextMenu();
+                openFolderContextMenu(event, chatContext);
               }
             })(),
-            "assignChatToFolder failed"
+            "toggle folder context action failed"
           );
         });
 
@@ -902,6 +981,7 @@
 
         activeChatContext = {
           chatId,
+          folderId: customChat?.dataset.folderId || null,
           title: link ? getChatDisplayTitleFromLink(link) : (customChat.dataset.chatTitle || customChat.textContent || "Untitled Chat").trim()
         };
 
@@ -991,8 +1071,16 @@
 
     Object.entries(mappings || {}).forEach(([chatId, entry]) => {
       const normalizedEntry = normalizeChatMappingEntry(entry);
-      if (normalizedEntry && !folderIdSet.has(normalizedEntry.folderID)) {
-        nextMappings[chatId] = normalizedEntry;
+      if (!normalizedEntry) {
+        return;
+      }
+
+      const remainingFolderIDs = normalizedEntry.folderIDs.filter((folderID) => !folderIdSet.has(folderID));
+      if (remainingFolderIDs.length) {
+        nextMappings[chatId] = {
+          folderIDs: remainingFolderIDs,
+          title: normalizedEntry.title
+        };
       }
     });
 
@@ -1109,13 +1197,6 @@
       attributes: true,
       attributeFilter: ["class"]
     });
-  }
-
-  function createDot(className) {
-    const dot = document.createElement("span");
-    dot.className = className;
-    dot.setAttribute("aria-hidden", "true");
-    return dot;
   }
 
   function createFolderIcon() {
@@ -1284,6 +1365,7 @@
         const chatButton = document.createElement("a");
         chatButton.className = "gfo-folder-chat-item";
         chatButton.dataset.chatId = chat.chatId;
+        chatButton.dataset.folderId = folder.id;
         chatButton.dataset.chatTitle = chat.title;
         chatButton.textContent = chat.title;
         chatButton.href = getChatUrl(chat.chatId);

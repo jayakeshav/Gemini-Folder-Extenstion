@@ -318,10 +318,30 @@
   border-radius: 8px;
   font-size: 12px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .gfo-folder-context-menu-item:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.gfo-folder-context-menu-item.is-selected {
+  background: rgba(138, 180, 248, 0.12);
+}
+
+.gfo-folder-context-menu-check {
+  width: 12px;
+  flex: 0 0 12px;
+  color: #8ab4f8;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.gfo-folder-context-menu-label {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .gfo-folder-context-menu-item:disabled {
@@ -404,6 +424,26 @@
   border-radius: 8px;
   font-size: 12px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gfo-quick-add-menu-item.is-selected {
+  background: rgba(138, 180, 248, 0.12);
+}
+
+.gfo-quick-add-menu-check {
+  width: 12px;
+  flex: 0 0 12px;
+  color: #8ab4f8;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.gfo-quick-add-menu-label {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .gfo-quick-add-menu-item:hover {
