@@ -519,6 +519,13 @@
     }
   }
 
+  function removeQuickAddButton() {
+    const existingButton = document.getElementById(QUICK_ADD_BUTTON_ID);
+    if (existingButton) {
+      existingButton.remove();
+    }
+  }
+
   async function assignChatToFolder(chatContext, folderId) {
     if (!chatContext || !chatContext.chatId || !folderId) {
       return false;
@@ -690,6 +697,13 @@
       return;
     }
 
+    // Only show quick-add when a concrete chat route is open.
+    if (!getCurrentChatIdFromPath()) {
+      closeQuickAddMenu();
+      removeQuickAddButton();
+      return;
+    }
+
     const actionGroup = findHeaderActionGroup();
     if (!actionGroup) {
       return;
@@ -703,7 +717,7 @@
       button.type = "button";
       button.className = "gfo-quick-add";
       button.setAttribute("aria-label", "Add current chat to folder");
-      button.textContent = "\ud83d\udcc1";
+      button.innerHTML = getQuickAddFolderIconMarkup();
 
       button.addEventListener("click", (event) => {
         event.preventDefault();
@@ -1106,7 +1120,7 @@
 
   function createFolderIcon() {
     const icon = document.createElement("span");
-    icon.className = "gfo-title-folder-icon";
+    icon.className = "gfo-title-dot gfo-title-folder-icon";
     icon.setAttribute("aria-hidden", "true");
     icon.innerHTML = `
       <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
@@ -1114,6 +1128,32 @@
       </svg>
     `;
     return icon;
+  }
+
+  function getFolderStateIconMarkup(isOpen) {
+    if (isOpen) {
+      return `
+        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+          <path d="M3 9.25C3 7.73 4.23 6.5 5.75 6.5h3.98c.4 0 .78-.16 1.06-.44l.38-.38c.38-.38.88-.59 1.41-.59h5.67C19.77 5.09 21 6.32 21 7.84v1.41H3Z"></path>
+          <path d="M3.12 10.75h17.76c.8 0 1.38.76 1.16 1.53l-1.14 4.06c-.33 1.2-1.43 2.03-2.68 2.03H5.78c-1.25 0-2.35-.83-2.68-2.03L1.96 12.28c-.22-.77.36-1.53 1.16-1.53Z"></path>
+        </svg>
+      `;
+    }
+
+    return `
+      <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+        <path d="M3 7.5C3 6.12 4.12 5 5.5 5h4.38c.53 0 1.04.21 1.41.59L12.7 7H18.5C19.88 7 21 8.12 21 9.5v7c0 1.38-1.12 2.5-2.5 2.5h-13C4.12 19 3 17.88 3 16.5v-9Z"></path>
+      </svg>
+    `;
+  }
+
+  function getQuickAddFolderIconMarkup() {
+    return `
+      <svg class="gfo-quick-add-icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+        <path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v-2H4V8h16v3h2V8c0-1.1-.9-2-2-2Z"></path>
+        <path d="M16 12c-.55 0-1 .45-1 1v2h-2c-.55 0-1 .45-1 1s.45 1 1 1h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2c0-.55-.45-1-1-1Z"></path>
+      </svg>
+    `;
   }
 
   function isFolderCollapsed(folderId) {
@@ -1188,13 +1228,11 @@
     const toggleButton = document.createElement("button");
     toggleButton.type = "button";
     toggleButton.className = "gfo-toggle-folder";
-    toggleButton.textContent = isCollapsed ? ">" : "v";
+    toggleButton.innerHTML = getFolderStateIconMarkup(!isCollapsed);
     toggleButton.setAttribute("aria-label", isCollapsed ? `Expand ${folder.name}` : `Collapse ${folder.name}`);
     toggleButton.setAttribute("aria-expanded", String(!isCollapsed));
     toggleButton.classList.toggle("is-open", !isCollapsed);
     toggleButton.disabled = !hasNestedContent;
-
-    const icon = createDot("gfo-folder-dot");
 
     const label = document.createElement("span");
     label.className = "gfo-folder-name";
@@ -1225,7 +1263,7 @@
 
     actions.append(addSubFolderButton, deleteButton);
 
-    row.append(toggleButton, icon, label, actions);
+    row.append(toggleButton, label, actions);
 
     const childrenContainer = document.createElement("div");
     childrenContainer.className = "gfo-folder-children";
@@ -1276,7 +1314,7 @@
       toggleButton.classList.toggle("is-open", !nextCollapsed);
       toggleButton.setAttribute("aria-expanded", String(!nextCollapsed));
       toggleButton.setAttribute("aria-label", nextCollapsed ? `Expand ${folder.name}` : `Collapse ${folder.name}`);
-      toggleButton.textContent = nextCollapsed ? ">" : "v";
+      toggleButton.innerHTML = getFolderStateIconMarkup(!nextCollapsed);
     });
 
     addSubFolderButton.addEventListener("click", (event) => {

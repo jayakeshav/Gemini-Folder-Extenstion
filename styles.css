@@ -1,4 +1,6 @@
 #gfo-folders-root.gfo-root {
+  --gfo-folder-icon-closed-color: #bcbcbc;
+  --gfo-folder-icon-open-color: #8ab4f8;
   font-family: "Google Sans", "Segoe UI", sans-serif;
   background: #1f1f1f;
   border: 1px solid #2f2f2f;
@@ -55,6 +57,8 @@
   height: 18px;
   flex: 0 0 auto;
   margin-right: 10px;
+  border: 0;
+  border-radius: 0;
   color: #d7dbe0;
   display: inline-flex;
   align-items: center;
@@ -148,36 +152,32 @@
 .gfo-toggle-folder {
   border: 0;
   background: transparent;
-  color: #bcbcbc;
+  color: var(--gfo-folder-icon-closed-color);
   padding: 0;
-  margin: 0 8px 0 0;
-  width: 16px;
-  height: 16px;
+  margin: 0 10px 0 0;
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  line-height: 1;
   cursor: pointer;
   flex: 0 0 auto;
 }
 
+.gfo-toggle-folder svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  fill: currentColor;
+}
+
 .gfo-toggle-folder.is-open {
-  color: #d7dbe0;
+  color: var(--gfo-folder-icon-open-color);
 }
 
 .gfo-toggle-folder:disabled {
   opacity: 0.35;
   cursor: default;
-}
-
-.gfo-folder-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #8ab4f8;
-  flex: 0 0 auto;
-  margin-right: 12px;
 }
 
 .gfo-folder-name {
@@ -352,15 +352,20 @@
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
-  color: #e8eaed;
+  color: #f1f3f4;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  line-height: 1;
   cursor: pointer;
   margin-left: 4px;
   flex: 0 0 auto;
+}
+
+#gfo-quick-add.gfo-quick-add .gfo-quick-add-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  fill: currentColor;
 }
 
 #gfo-quick-add.gfo-quick-add:hover {
@@ -504,11 +509,6 @@
 .sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-folder-node,
 #gfo-folders-root.gfo-collapsed .gfo-folder-node {
   width: 100%;
-}
-
-.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-folder-dot,
-#gfo-folders-root.gfo-collapsed .gfo-folder-dot {
-  margin-right: 0;
 }
 
 .sidenav-with-history-container.expanded #gfo-folders-root,
