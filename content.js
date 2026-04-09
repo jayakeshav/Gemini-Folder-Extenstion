@@ -6,6 +6,10 @@
   let activeFoldersList = null;
   let nativeChatObserver = null;
   let sidebarObserver = null;
+  let activeChatContext = null;
+  let folderContextMenu = null;
+  let folderContextMenuOutsideHandler = null;
+  let folderContextMenuBound = false;
   let isContextAlive = true;
 
   function isExtensionContextInvalidated(error) {
@@ -32,6 +36,8 @@
       sidebarObserver.disconnect();
       sidebarObserver = null;
     }
+
+    closeFolderContextMenu();
   }
 
   function warnIfUnexpected(error, scope) {
@@ -112,8 +118,50 @@
     });
   }
 
-  function normalizeMappings(value) {
-    return isPlainObject(value) ? { ...value } : {};
+  function normalizeChatMappingEntry(value) {
+    if (typeof value === "string") {
+      return {
+        folderID: value,
+        title: ""
+      };
+    }
+
+    if (!isPlainObject(value)) {
+      return null;
+    }
+
+    const folderID =
+      typeof value.folderID === "string" && value.folderID
+        ? value.folderID
+        : typeof value.folderId === "string" && value.folderId
+          ? value.folderId
+          : "";
+
+    if (!folderID) {
+      return null;
+    }
+
+    return {
+      folderID,
+      title: typeof value.title === "string" ? value.title.trim() : ""
+    };
+  }
+
+  function normalizeChatToFolderMap(value) {
+    if (!isPlainObject(value)) {
+      return {};
+    }
+
+    const nextMap = {};
+
+    Object.entries(value).forEach(([chatId, entry]) => {
+      const normalizedEntry = normalizeChatMappingEntry(entry);
+      if (normalizedEntry) {
+        nextMap[chatId] = normalizedEntry;
+      }
+    });
+
+    return nextMap;
   }
 
   function normalizeState(rawState) {
@@ -127,7 +175,7 @@
     if (isPlainObject(rawState)) {
       return {
         folders: normalizeFolderTree(rawState.folders),
-        chatToFolderMap: normalizeMappings(rawState.chatToFolderMap ?? rawState.chatFolderMappings)
+        chatToFolderMap: normalizeChatToFolderMap(rawState.chatToFolderMap ?? rawState.chatFolderMappings)
       };
     }
 
@@ -137,16 +185,20 @@
     };
   }
 
-  function mappingsNeedMigration(rawState) {
+  function chatMappingsNeedMigration(rawState) {
     if (!isPlainObject(rawState)) {
       return false;
     }
 
-    if (rawState.chatToFolderMap !== undefined && !isPlainObject(rawState.chatToFolderMap)) {
+    const sourceMap = rawState.chatToFolderMap ?? rawState.chatFolderMappings;
+
+    if (sourceMap !== undefined && !isPlainObject(sourceMap)) {
       return true;
     }
 
-    return !("chatToFolderMap" in rawState) && Object.keys(normalizeMappings(rawState.chatFolderMappings)).length > 0;
+    return Object.values(sourceMap || {}).some((entry) => {
+      return !isPlainObject(entry) || typeof entry.folderID !== "string" || !entry.folderID || typeof entry.title !== "string";
+    });
   }
 
   async function getFolders() {
@@ -173,7 +225,7 @@
       const rawState = result[STORAGE_KEY];
       const state = normalizeState(rawState);
 
-      if (folderTreeNeedsMigration(rawState?.folders ?? rawState) || mappingsNeedMigration(rawState)) {
+      if (folderTreeNeedsMigration(rawState?.folders ?? rawState) || chatMappingsNeedMigration(rawState)) {
         await saveFolderState(state);
       }
 
@@ -211,6 +263,257 @@
     });
 
     return folderIds;
+  }
+
+  function flattenFolderTree(folders, depth = 0) {
+    const rows = [];
+
+    folders.forEach((folder) => {
+      rows.push({
+        id: folder.id,
+        name: folder.name,
+        depth
+      });
+
+      if (Array.isArray(folder.children) && folder.children.length) {
+        rows.push(...flattenFolderTree(folder.children, depth + 1));
+      }
+    });
+
+    return rows;
+  }
+
+  function getChatsForFolder(folderId, chatToFolderMap) {
+    return Object.entries(chatToFolderMap || {})
+      .filter(([, entry]) => entry && entry.folderID === folderId)
+      .map(([chatId, entry]) => ({
+        chatId,
+        title: entry.title || "Untitled Chat"
+      }))
+      .sort((left, right) => left.title.localeCompare(right.title));
+  }
+
+  function extractChatIdFromLink(link) {
+    try {
+      const href = link.getAttribute("href") || link.href;
+      if (!href) {
+        return null;
+      }
+
+      const url = new URL(href, window.location.origin);
+      const parts = url.pathname.split("/").filter(Boolean);
+
+      const candidate = parts.pop() || null;
+      if (!candidate || candidate === "app") {
+        return null;
+      }
+
+      return candidate;
+    } catch {
+      return null;
+    }
+  }
+
+  function getChatDisplayTitleFromLink(link) {
+    const text = (link.textContent || link.getAttribute("aria-label") || link.title || "").trim();
+    return text || "Untitled Chat";
+  }
+
+  function getChatUrl(chatId) {
+    return `/app/${chatId}`;
+  }
+
+  function navigateToChat(chatId) {
+    window.open(getChatUrl(chatId), "_self");
+  }
+
+  function closeFolderContextMenu() {
+    if (folderContextMenu) {
+      folderContextMenu.remove();
+      folderContextMenu = null;
+    }
+
+    if (folderContextMenuOutsideHandler) {
+      document.removeEventListener("pointerdown", folderContextMenuOutsideHandler, true);
+      folderContextMenuOutsideHandler = null;
+    }
+
+    activeChatContext = null;
+  }
+
+  async function assignChatToFolder(chatContext, folderId) {
+    if (!chatContext || !chatContext.chatId || !folderId) {
+      return false;
+    }
+
+    const state = await loadFolderState();
+    const nextMap = { ...(state.chatToFolderMap || {}) };
+
+    nextMap[chatContext.chatId] = {
+      folderID: folderId,
+      title: chatContext.title || "Untitled Chat"
+    };
+
+    return saveFolderState({
+      ...state,
+      chatToFolderMap: nextMap
+    });
+  }
+
+  async function removeChatFromFolder(chatId) {
+    if (!chatId) {
+      return false;
+    }
+
+    const state = await loadFolderState();
+    const nextMap = { ...(state.chatToFolderMap || {}) };
+
+    if (!(chatId in nextMap)) {
+      return true;
+    }
+
+    delete nextMap[chatId];
+
+    return saveFolderState({
+      ...state,
+      chatToFolderMap: nextMap
+    });
+  }
+
+  async function openFolderContextMenu(event, chatContext) {
+    if (!isContextAlive || !chatContext) {
+      return;
+    }
+
+    closeFolderContextMenu();
+
+    const state = await loadFolderState();
+    const folders = flattenFolderTree(state.folders);
+    const mappedEntry = normalizeChatMappingEntry((state.chatToFolderMap || {})[chatContext.chatId]);
+
+    const menu = document.createElement("div");
+    menu.id = "gfo-folder-context-menu";
+    menu.className = "gfo-folder-context-menu";
+
+    const header = document.createElement("div");
+    header.className = "gfo-folder-context-menu-header";
+    header.textContent = `Add \"${chatContext.title}\" to:`;
+    menu.appendChild(header);
+
+    const removeItem = document.createElement("button");
+    removeItem.type = "button";
+    removeItem.className = "gfo-folder-context-menu-item gfo-folder-context-menu-item-remove";
+    removeItem.textContent = "Remove from folder";
+    removeItem.disabled = !mappedEntry;
+    removeItem.addEventListener("click", (clickEvent) => {
+      clickEvent.preventDefault();
+      clickEvent.stopPropagation();
+      fireAndForget(
+        (async () => {
+          const saved = await removeChatFromFolder(chatContext.chatId);
+          if (saved) {
+            await refreshFolderUI();
+            closeFolderContextMenu();
+          }
+        })(),
+        "removeChatFromFolder failed"
+      );
+    });
+    menu.appendChild(removeItem);
+
+    if (!folders.length) {
+      const empty = document.createElement("div");
+      empty.className = "gfo-folder-context-menu-empty";
+      empty.textContent = "No folders yet";
+      menu.appendChild(empty);
+    } else {
+      folders.forEach((folder) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "gfo-folder-context-menu-item";
+        item.style.paddingLeft = `${12 + folder.depth * 14}px`;
+        item.textContent = folder.name;
+
+        item.addEventListener("click", (clickEvent) => {
+          clickEvent.preventDefault();
+          clickEvent.stopPropagation();
+          fireAndForget(
+            (async () => {
+              const saved = await assignChatToFolder(chatContext, folder.id);
+              if (saved) {
+                await refreshFolderUI();
+                closeFolderContextMenu();
+              }
+            })(),
+            "assignChatToFolder failed"
+          );
+        });
+
+        menu.appendChild(item);
+      });
+    }
+
+    document.body.appendChild(menu);
+
+    const maxLeft = window.scrollX + document.documentElement.clientWidth - menu.offsetWidth - 8;
+    const maxTop = window.scrollY + document.documentElement.clientHeight - menu.offsetHeight - 8;
+    const left = Math.max(window.scrollX + 8, Math.min(event.pageX, maxLeft));
+    const top = Math.max(window.scrollY + 8, Math.min(event.pageY, maxTop));
+
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+
+    folderContextMenu = menu;
+
+    folderContextMenuOutsideHandler = (pointerEvent) => {
+      if (folderContextMenu && folderContextMenu.contains(pointerEvent.target)) {
+        return;
+      }
+
+      closeFolderContextMenu();
+    };
+
+    document.addEventListener("pointerdown", folderContextMenuOutsideHandler, true);
+  }
+
+  function bindFolderContextMenuListener() {
+    if (folderContextMenuBound) {
+      return;
+    }
+
+    folderContextMenuBound = true;
+
+    document.addEventListener(
+      "contextmenu",
+      (event) => {
+        if (!isContextAlive) {
+          return;
+        }
+
+        const link = event.target.closest("a[data-test-id=\"conversation\"]");
+        const customChat = event.target.closest(".gfo-folder-chat-item");
+
+        if (!link && !customChat) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const chatId = link ? extractChatIdFromLink(link) : customChat.dataset.chatId || null;
+        if (!chatId) {
+          return;
+        }
+
+        activeChatContext = {
+          chatId,
+          title: link ? getChatDisplayTitleFromLink(link) : (customChat.dataset.chatTitle || customChat.textContent || "Untitled Chat").trim()
+        };
+
+        fireAndForget(openFolderContextMenu(event, activeChatContext), "openFolderContextMenu failed");
+      },
+      true
+    );
   }
 
   function insertFolderIntoTree(folders, parentId, newFolder) {
@@ -291,9 +594,10 @@
     const folderIdSet = new Set(folderIds);
     const nextMappings = {};
 
-    Object.entries(mappings || {}).forEach(([chatId, folderId]) => {
-      if (!folderIdSet.has(folderId)) {
-        nextMappings[chatId] = folderId;
+    Object.entries(mappings || {}).forEach(([chatId, entry]) => {
+      const normalizedEntry = normalizeChatMappingEntry(entry);
+      if (normalizedEntry && !folderIdSet.has(normalizedEntry.folderID)) {
+        nextMappings[chatId] = normalizedEntry;
       }
     });
 
@@ -438,7 +742,7 @@
     }
 
     const state = await loadFolderState();
-    renderFolders(activeFoldersList, state.folders);
+    renderFolders(activeFoldersList, state.folders, state.chatToFolderMap);
     syncState(activeFoldersRoot, findHistoryContainer(findSidebar()));
   }
 
@@ -467,7 +771,7 @@
     }
   }
 
-  function renderFolderNode(folder, depth = 0) {
+  function renderFolderNode(folder, depth = 0, chatToFolderMap = {}) {
     const node = document.createElement("div");
     node.className = "gfo-folder-node";
     node.dataset.folderId = folder.id;
@@ -481,7 +785,9 @@
       row.classList.add("gfo-folder-item--child");
     }
 
+    const assignedChats = getChatsForFolder(folder.id, chatToFolderMap);
     const hasChildren = Array.isArray(folder.children) && folder.children.length > 0;
+    const hasNestedContent = hasChildren || assignedChats.length > 0;
     const isCollapsed = isFolderCollapsed(folder.id);
     node.classList.toggle("gfo-folder-node--collapsed", isCollapsed);
 
@@ -492,7 +798,7 @@
     toggleButton.setAttribute("aria-label", isCollapsed ? `Expand ${folder.name}` : `Collapse ${folder.name}`);
     toggleButton.setAttribute("aria-expanded", String(!isCollapsed));
     toggleButton.classList.toggle("is-open", !isCollapsed);
-    toggleButton.disabled = !hasChildren;
+    toggleButton.disabled = !hasNestedContent;
 
     const icon = createDot("gfo-folder-dot");
 
@@ -534,13 +840,37 @@
 
     if (hasChildren) {
       folder.children.forEach((childFolder) => {
-        childrenContainer.appendChild(renderFolderNode(childFolder, depth + 1));
+        childrenContainer.appendChild(renderFolderNode(childFolder, depth + 1, chatToFolderMap));
       });
+    }
+
+    if (assignedChats.length) {
+      const chatList = document.createElement("div");
+      chatList.className = "gfo-folder-chat-list";
+
+      assignedChats.forEach((chat) => {
+        const chatButton = document.createElement("button");
+        chatButton.type = "button";
+        chatButton.className = "gfo-folder-chat-item";
+        chatButton.dataset.chatId = chat.chatId;
+        chatButton.dataset.chatTitle = chat.title;
+        chatButton.textContent = chat.title;
+        chatButton.setAttribute("aria-label", `Open ${chat.title}`);
+        chatButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          navigateToChat(chat.chatId);
+        });
+
+        chatList.appendChild(chatButton);
+      });
+
+      childrenContainer.appendChild(chatList);
     }
 
     toggleButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (!hasChildren) {
+      if (!hasNestedContent) {
         return;
       }
 
@@ -570,7 +900,7 @@
         return;
       }
 
-      if (!hasChildren) {
+      if (!hasNestedContent) {
         return;
       }
 
@@ -581,7 +911,7 @@
     return node;
   }
 
-  function renderFolders(listEl, folders) {
+  function renderFolders(listEl, folders, chatToFolderMap) {
     listEl.innerHTML = "";
 
     if (!folders.length) {
@@ -593,7 +923,7 @@
     }
 
     folders.forEach((folder) => {
-      listEl.appendChild(renderFolderNode(folder));
+      listEl.appendChild(renderFolderNode(folder, 0, chatToFolderMap || {}));
     });
   }
 
@@ -640,6 +970,7 @@
         activeFoldersList = existing.querySelector(".gfo-list");
         syncState(existing, historyContainer);
         watchState(existing, historyContainer);
+        bindFolderContextMenuListener();
         await refreshFolderUI();
         return;
       }
@@ -689,9 +1020,10 @@
       activeFoldersList = list;
       syncState(root, historyContainer);
       watchState(root, historyContainer);
+      bindFolderContextMenuListener();
 
       const state = await loadFolderState();
-      renderFolders(list, state.folders);
+      renderFolders(list, state.folders, state.chatToFolderMap);
 
       newFolderButton.addEventListener("click", () => {
         fireAndForget(handleCreateFolder(), "handleCreateFolder failed");
@@ -732,6 +1064,8 @@
       if (!isContextAlive || !sidebarObserver) {
         return;
       }
+
+      bindFolderContextMenuListener();
       tryInject();
     });
 
