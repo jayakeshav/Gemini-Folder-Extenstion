@@ -75,24 +75,6 @@
   box-sizing: border-box;
 }
 
-.gfo-clear-filter {
-  margin-left: auto;
-  margin-right: 8px;
-  border: 1px solid #3b4450;
-  background: transparent;
-  color: #d7dbe0;
-  border-radius: 14px;
-  height: 28px;
-  padding: 0 10px;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.gfo-clear-filter:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
 .gfo-button-icon {
   font-size: 18px;
   font-weight: 700;
@@ -165,6 +147,11 @@
   color: #d7dbe0;
 }
 
+.gfo-toggle-folder:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .gfo-folder-dot {
   width: 10px;
   height: 10px;
@@ -190,11 +177,6 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
-.gfo-folder-item--active {
-  border-color: #8ab4f8;
-  background: rgba(138, 180, 248, 0.16);
-}
-
 .gfo-folder-actions {
   display: inline-flex;
   align-items: center;
@@ -202,21 +184,24 @@
   gap: 4px;
   margin-left: auto;
   min-width: 40px;
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1;
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+  padding: 2px 4px;
 }
 
 .gfo-folder-item:hover .gfo-folder-actions {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .gfo-folder-action {
   border: 0;
   background: transparent;
   color: #bcbcbc;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   margin: 0;
   display: inline-flex;
@@ -225,6 +210,7 @@
   line-height: 1;
   cursor: pointer;
   flex: 0 0 auto;
+  border-radius: 6px;
 }
 
 .gfo-folder-action-delete {
@@ -245,90 +231,14 @@
   box-sizing: border-box;
 }
 
+.gfo-folder-node.gfo-folder-node--collapsed > .gfo-folder-children {
+  display: none !important;
+}
+
 .gfo-empty-state {
   font-size: 12px;
   color: #9aa0a6;
   padding: 6px 2px;
-}
-
-.gfo-hidden {
-  display: none !important;
-}
-
-.gfo-native-chat-item {
-  position: relative;
-}
-
-.gfo-native-chat-item a[data-test-id="conversation"] {
-  padding-right: 28px;
-}
-
-.gfo-chat-move-button {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  border: 0;
-  background: transparent;
-  color: #aeb4bb;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  font-size: 12px;
-  line-height: 1;
-  padding: 0;
-  cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.gfo-native-chat-item:hover .gfo-chat-move-button,
-.gfo-chat-move-button:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.gfo-chat-move-button:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.gfo-move-menu {
-  position: fixed;
-  z-index: 2147483000;
-  min-width: 220px;
-  max-width: 280px;
-  background: #202124;
-  border: 1px solid #3c4043;
-  border-radius: 10px;
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
-  padding: 6px;
-}
-
-.gfo-move-menu-item {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: #e8eaed;
-  text-align: left;
-  border-radius: 8px;
-  min-height: 30px;
-  padding: 0 12px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.gfo-move-menu-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.gfo-move-menu-item.is-active {
-  color: #8ab4f8;
-}
-
-.gfo-move-menu-empty {
-  color: #9aa0a6;
-  font-size: 12px;
-  padding: 8px 12px;
 }
 
 /* Collapsed rail behavior based on Gemini state class. */
@@ -344,7 +254,6 @@
 
 .sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-title,
 .sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-button-label,
-.sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-clear-filter,
 .sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-folder-name,
 .sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-empty-state,
 .sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-toggle-folder,
@@ -352,7 +261,6 @@
 .sidenav-with-history-container:not(.expanded) #gfo-folders-root .gfo-folder-children,
 #gfo-folders-root.gfo-collapsed .gfo-title,
 #gfo-folders-root.gfo-collapsed .gfo-button-label,
-#gfo-folders-root.gfo-collapsed .gfo-clear-filter,
 #gfo-folders-root.gfo-collapsed .gfo-folder-name,
 #gfo-folders-root.gfo-collapsed .gfo-empty-state,
 #gfo-folders-root.gfo-collapsed .gfo-toggle-folder,
@@ -434,12 +342,10 @@
 
 .sidenav-with-history-container.expanded #gfo-folders-root .gfo-title,
 .sidenav-with-history-container.expanded #gfo-folders-root .gfo-button-label,
-.sidenav-with-history-container.expanded #gfo-folders-root .gfo-clear-filter,
 .sidenav-with-history-container.expanded #gfo-folders-root .gfo-folder-name,
 .sidenav-with-history-container.expanded #gfo-folders-root .gfo-empty-state,
 #gfo-folders-root.gfo-expanded .gfo-title,
 #gfo-folders-root.gfo-expanded .gfo-button-label,
-#gfo-folders-root.gfo-expanded .gfo-clear-filter,
 #gfo-folders-root.gfo-expanded .gfo-folder-name,
 #gfo-folders-root.gfo-expanded .gfo-empty-state {
   display: initial;

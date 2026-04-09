@@ -1,14 +1,55 @@
 (() => {
   const STORAGE_KEY = "geminiFolders";
   const ROOT_ID = "gfo-folders-root";
-  const CHAT_LINK_SELECTOR = 'a[data-test-id="conversation"]';
-  const MOVE_MENU_ID = "gfo-move-menu";
   const collapsedFolderIds = new Set();
   let activeFoldersRoot = null;
   let activeFoldersList = null;
-  let activeFolderFilterId = null;
   let nativeChatObserver = null;
-  let moveMenuOutsideHandler = null;
+  let sidebarObserver = null;
+  let isContextAlive = true;
+
+  function isExtensionContextInvalidated(error) {
+    const message = String(error && error.message ? error.message : error || "");
+    return message.includes("Extension context invalidated");
+  }
+
+  function hasRuntimeContext() {
+    try {
+      return Boolean(chrome && chrome.runtime && chrome.runtime.id && chrome.storage && chrome.storage.local);
+    } catch {
+      return false;
+    }
+  }
+
+  function shutdownOnContextInvalidation() {
+    if (!isContextAlive) {
+      return;
+    }
+
+    isContextAlive = false;
+
+    if (sidebarObserver) {
+      sidebarObserver.disconnect();
+      sidebarObserver = null;
+    }
+  }
+
+  function warnIfUnexpected(error, scope) {
+    if (isExtensionContextInvalidated(error)) {
+      shutdownOnContextInvalidation();
+      return;
+    }
+
+    if (!isExtensionContextInvalidated(error)) {
+      console.warn(`Gemini Folders: ${scope}`, error);
+    }
+  }
+
+  function fireAndForget(promise, scope) {
+    promise.catch((error) => {
+      warnIfUnexpected(error, scope);
+    });
+  }
 
   function createFolderId() {
     if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
@@ -109,25 +150,57 @@
   }
 
   async function getFolders() {
-    const result = await chrome.storage.local.get(STORAGE_KEY);
-    const state = normalizeState(result[STORAGE_KEY]);
+    if (!isContextAlive) {
+      return [];
+    }
+
+    const state = await loadFolderState();
     return state.folders;
   }
 
   async function loadFolderState() {
-    const result = await chrome.storage.local.get(STORAGE_KEY);
-    const rawState = result[STORAGE_KEY];
-    const state = normalizeState(rawState);
-
-    if (folderTreeNeedsMigration(rawState?.folders ?? rawState) || mappingsNeedMigration(rawState)) {
-      await saveFolderState(state);
+    if (!isContextAlive) {
+      return normalizeState(undefined);
     }
 
-    return state;
+    if (!hasRuntimeContext()) {
+      shutdownOnContextInvalidation();
+      return normalizeState(undefined);
+    }
+
+    try {
+      const result = await chrome.storage.local.get(STORAGE_KEY);
+      const rawState = result[STORAGE_KEY];
+      const state = normalizeState(rawState);
+
+      if (folderTreeNeedsMigration(rawState?.folders ?? rawState) || mappingsNeedMigration(rawState)) {
+        await saveFolderState(state);
+      }
+
+      return state;
+    } catch (error) {
+      warnIfUnexpected(error, "loadFolderState failed");
+      return normalizeState(undefined);
+    }
   }
 
   async function saveFolderState(state) {
-    await chrome.storage.local.set({ [STORAGE_KEY]: state });
+    if (!isContextAlive) {
+      return false;
+    }
+
+    if (!hasRuntimeContext()) {
+      shutdownOnContextInvalidation();
+      return false;
+    }
+
+    try {
+      await chrome.storage.local.set({ [STORAGE_KEY]: state });
+      return true;
+    } catch (error) {
+      warnIfUnexpected(error, "saveFolderState failed");
+      return false;
+    }
   }
 
   function collectFolderIds(folder) {
@@ -253,12 +326,12 @@
       nextFolders = [...state.folders, newFolder];
     }
 
-    await saveFolderState({
+    const saved = await saveFolderState({
       ...state,
       folders: nextFolders
     });
 
-    return true;
+    return saved;
   }
 
   async function deleteFolder(folderId) {
@@ -271,241 +344,13 @@
 
     removal.removedIds.forEach((id) => collapsedFolderIds.delete(id));
 
-    await saveFolderState({
+    const saved = await saveFolderState({
       ...state,
       folders: removal.folders,
       chatToFolderMap: clearMappingsForFolderIds(state.chatToFolderMap, removal.removedIds)
     });
 
-    return true;
-  }
-
-  function extractChatIdFromLink(link) {
-    try {
-      const url = new URL(link.href, window.location.origin);
-      const parts = url.pathname.split("/").filter(Boolean);
-      return parts.pop() || null;
-    } catch {
-      return null;
-    }
-  }
-
-  function getNativeChatItem(link) {
-    return link.closest("side-nav-entry-button") || link.parentElement || link;
-  }
-
-  async function setChatFolderMapping(chatId, folderId) {
-    if (!chatId) {
-      return;
-    }
-
-    const state = await loadFolderState();
-    const nextMap = { ...(state.chatToFolderMap || {}) };
-
-    if (!folderId) {
-      delete nextMap[chatId];
-    } else {
-      nextMap[chatId] = folderId;
-    }
-
-    await saveFolderState({
-      ...state,
-      chatToFolderMap: nextMap
-    });
-  }
-
-  function flattenFolderTree(folders, depth = 0) {
-    const rows = [];
-
-    folders.forEach((folder) => {
-      rows.push({
-        id: folder.id,
-        name: folder.name,
-        depth
-      });
-
-      if (Array.isArray(folder.children) && folder.children.length) {
-        rows.push(...flattenFolderTree(folder.children, depth + 1));
-      }
-    });
-
-    return rows;
-  }
-
-  function closeMoveMenu() {
-    const existing = document.getElementById(MOVE_MENU_ID);
-    if (existing) {
-      existing.remove();
-    }
-
-    if (moveMenuOutsideHandler) {
-      document.removeEventListener("pointerdown", moveMenuOutsideHandler, true);
-      moveMenuOutsideHandler = null;
-    }
-  }
-
-  async function openMoveMenu(triggerButton, chatId) {
-    closeMoveMenu();
-
-    const state = await loadFolderState();
-    const rows = flattenFolderTree(state.folders);
-    const currentFolderId = state.chatToFolderMap?.[chatId] || null;
-
-    const menu = document.createElement("div");
-    menu.id = MOVE_MENU_ID;
-    menu.className = "gfo-move-menu";
-
-    const removeItem = document.createElement("button");
-    removeItem.type = "button";
-    removeItem.className = "gfo-move-menu-item";
-    removeItem.textContent = "Remove from folder";
-    removeItem.classList.toggle("is-active", !currentFolderId);
-    removeItem.addEventListener("click", async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      await setChatFolderMapping(chatId, null);
-      await applyCurrentFolderFilter();
-      closeMoveMenu();
-    });
-    menu.appendChild(removeItem);
-
-    if (!rows.length) {
-      const empty = document.createElement("div");
-      empty.className = "gfo-move-menu-empty";
-      empty.textContent = "No folders available";
-      menu.appendChild(empty);
-    } else {
-      rows.forEach((row) => {
-        const item = document.createElement("button");
-        item.type = "button";
-        item.className = "gfo-move-menu-item";
-        item.style.paddingLeft = `${12 + row.depth * 14}px`;
-        item.textContent = row.name;
-        item.classList.toggle("is-active", currentFolderId === row.id);
-        item.addEventListener("click", async (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          await setChatFolderMapping(chatId, row.id);
-          await applyCurrentFolderFilter();
-          closeMoveMenu();
-        });
-        menu.appendChild(item);
-      });
-    }
-
-    document.body.appendChild(menu);
-
-    const rect = triggerButton.getBoundingClientRect();
-    const menuRect = menu.getBoundingClientRect();
-    const top = Math.min(window.innerHeight - menuRect.height - 8, rect.bottom + 6);
-    const left = Math.max(8, Math.min(window.innerWidth - menuRect.width - 8, rect.right - menuRect.width));
-    menu.style.top = `${Math.max(8, top)}px`;
-    menu.style.left = `${left}px`;
-
-    moveMenuOutsideHandler = (event) => {
-      if (menu.contains(event.target) || triggerButton.contains(event.target)) {
-        return;
-      }
-
-      closeMoveMenu();
-    };
-
-    document.addEventListener("pointerdown", moveMenuOutsideHandler, true);
-  }
-
-  function ensureMoveButtonForChat(link) {
-    const row = getNativeChatItem(link);
-    if (!row) {
-      return;
-    }
-
-    row.classList.add("gfo-native-chat-item");
-
-    if (row.querySelector(".gfo-chat-move-button")) {
-      return;
-    }
-
-    const moveButton = document.createElement("button");
-    moveButton.type = "button";
-    moveButton.className = "gfo-chat-move-button";
-    moveButton.setAttribute("aria-label", "Move chat to folder");
-    moveButton.textContent = "\ud83d\udcc1";
-
-    moveButton.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const chatId = extractChatIdFromLink(link);
-      if (!chatId) {
-        return;
-      }
-
-      openMoveMenu(moveButton, chatId);
-    });
-
-    row.appendChild(moveButton);
-  }
-
-  function injectMoveButtons(sidebar) {
-    sidebar.querySelectorAll(CHAT_LINK_SELECTOR).forEach((link) => {
-      ensureMoveButtonForChat(link);
-    });
-  }
-
-  async function applyCurrentFolderFilter() {
-    const sidebar = findSidebar();
-    if (!sidebar) {
-      return;
-    }
-
-    const state = await loadFolderState();
-    const map = state.chatToFolderMap || {};
-
-    sidebar.querySelectorAll(CHAT_LINK_SELECTOR).forEach((link) => {
-      const row = getNativeChatItem(link);
-      if (!row) {
-        return;
-      }
-
-      const chatId = extractChatIdFromLink(link);
-      if (!activeFolderFilterId || !chatId) {
-        row.classList.remove("gfo-hidden");
-        return;
-      }
-
-      row.classList.toggle("gfo-hidden", map[chatId] !== activeFolderFilterId);
-    });
-  }
-
-  function observeNativeChatList(sidebar) {
-    if (nativeChatObserver) {
-      nativeChatObserver.disconnect();
-      nativeChatObserver = null;
-    }
-
-    injectMoveButtons(sidebar);
-    applyCurrentFolderFilter();
-
-    nativeChatObserver = new MutationObserver(() => {
-      injectMoveButtons(sidebar);
-      applyCurrentFolderFilter();
-    });
-
-    nativeChatObserver.observe(sidebar, {
-      childList: true,
-      subtree: true
-    });
-  }
-
-  async function setActiveFolderFilter(folderId) {
-    activeFolderFilterId = folderId;
-
-    if (activeFoldersList) {
-      activeFoldersList.querySelectorAll(".gfo-folder-item").forEach((row) => {
-        row.classList.toggle("gfo-folder-item--active", row.dataset.folderId === activeFolderFilterId);
-      });
-    }
-
-    await applyCurrentFolderFilter();
+    return saved;
   }
 
   function findSidebar() {
@@ -595,7 +440,6 @@
     const state = await loadFolderState();
     renderFolders(activeFoldersList, state.folders);
     syncState(activeFoldersRoot, findHistoryContainer(findSidebar()));
-    await applyCurrentFolderFilter();
   }
 
   async function handleCreateFolder(parentId = null) {
@@ -637,10 +481,9 @@
       row.classList.add("gfo-folder-item--child");
     }
 
-    row.classList.toggle("gfo-folder-item--active", folder.id === activeFolderFilterId);
-
     const hasChildren = Array.isArray(folder.children) && folder.children.length > 0;
     const isCollapsed = isFolderCollapsed(folder.id);
+    node.classList.toggle("gfo-folder-node--collapsed", isCollapsed);
 
     const toggleButton = document.createElement("button");
     toggleButton.type = "button";
@@ -649,6 +492,7 @@
     toggleButton.setAttribute("aria-label", isCollapsed ? `Expand ${folder.name}` : `Collapse ${folder.name}`);
     toggleButton.setAttribute("aria-expanded", String(!isCollapsed));
     toggleButton.classList.toggle("is-open", !isCollapsed);
+    toggleButton.disabled = !hasChildren;
 
     const icon = createDot("gfo-folder-dot");
 
@@ -664,12 +508,20 @@
     addSubFolderButton.className = "gfo-folder-action gfo-folder-action-add";
     addSubFolderButton.textContent = "+";
     addSubFolderButton.setAttribute("aria-label", `Add sub-folder to ${folder.name}`);
+    addSubFolderButton.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
 
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
     deleteButton.className = "gfo-folder-action gfo-folder-action-delete";
     deleteButton.textContent = "×";
     deleteButton.setAttribute("aria-label", `Delete ${folder.name}`);
+    deleteButton.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
 
     actions.append(addSubFolderButton, deleteButton);
 
@@ -677,7 +529,8 @@
 
     const childrenContainer = document.createElement("div");
     childrenContainer.className = "gfo-folder-children";
-    childrenContainer.style.display = isCollapsed ? "none" : "flex";
+    childrenContainer.hidden = isCollapsed;
+    childrenContainer.style.setProperty("display", isCollapsed ? "none" : "flex", "important");
 
     if (hasChildren) {
       folder.children.forEach((childFolder) => {
@@ -687,9 +540,15 @@
 
     toggleButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      const nextCollapsed = childrenContainer.style.display !== "none";
+      if (!hasChildren) {
+        return;
+      }
+
+      const nextCollapsed = !node.classList.contains("gfo-folder-node--collapsed");
       setFolderCollapsed(folder.id, nextCollapsed);
-      childrenContainer.style.display = nextCollapsed ? "none" : "flex";
+      node.classList.toggle("gfo-folder-node--collapsed", nextCollapsed);
+      childrenContainer.hidden = nextCollapsed;
+      childrenContainer.style.setProperty("display", nextCollapsed ? "none" : "flex", "important");
       toggleButton.classList.toggle("is-open", !nextCollapsed);
       toggleButton.setAttribute("aria-expanded", String(!nextCollapsed));
       toggleButton.setAttribute("aria-label", nextCollapsed ? `Expand ${folder.name}` : `Collapse ${folder.name}`);
@@ -698,16 +557,24 @@
 
     addSubFolderButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      handleCreateFolder(folder.id);
+      fireAndForget(handleCreateFolder(folder.id), "handleCreateFolder failed");
     });
 
     deleteButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      handleDeleteFolder(folder.id, folder.name);
+      fireAndForget(handleDeleteFolder(folder.id, folder.name), "handleDeleteFolder failed");
     });
 
-    row.addEventListener("click", () => {
-      setActiveFolderFilter(folder.id);
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("button")) {
+        return;
+      }
+
+      if (!hasChildren) {
+        return;
+      }
+
+      toggleButton.click();
     });
 
     node.append(row, childrenContainer);
@@ -773,16 +640,6 @@
         activeFoldersList = existing.querySelector(".gfo-list");
         syncState(existing, historyContainer);
         watchState(existing, historyContainer);
-
-        const clearFilterButton = existing.querySelector(".gfo-clear-filter");
-        if (clearFilterButton && clearFilterButton.dataset.gfoBound !== "true") {
-          clearFilterButton.dataset.gfoBound = "true";
-          clearFilterButton.addEventListener("click", async () => {
-            await setActiveFolderFilter(null);
-          });
-        }
-
-        observeNativeChatList(sidebar);
         await refreshFolderUI();
         return;
       }
@@ -806,12 +663,6 @@
       newFolderButton.className = "gfo-new-folder";
       newFolderButton.setAttribute("aria-label", "New Folder");
 
-      const clearFilterButton = document.createElement("button");
-      clearFilterButton.type = "button";
-      clearFilterButton.className = "gfo-clear-filter";
-      clearFilterButton.textContent = "Show All";
-      clearFilterButton.setAttribute("aria-label", "Show all chats");
-
       const newFolderButtonIcon = document.createElement("span");
       newFolderButtonIcon.className = "gfo-button-icon";
       newFolderButtonIcon.textContent = "+";
@@ -826,7 +677,7 @@
       const list = document.createElement("div");
       list.className = "gfo-list";
 
-      header.append(titleIcon, title, clearFilterButton, newFolderButton);
+      header.append(titleIcon, title, newFolderButton);
       root.append(header, list);
 
       const mounted = mountRoot(sidebar, root);
@@ -838,52 +689,89 @@
       activeFoldersList = list;
       syncState(root, historyContainer);
       watchState(root, historyContainer);
-      observeNativeChatList(sidebar);
 
       const state = await loadFolderState();
       renderFolders(list, state.folders);
-      await applyCurrentFolderFilter();
 
-      newFolderButton.addEventListener("click", async () => {
-        await handleCreateFolder();
-      });
-
-      clearFilterButton.addEventListener("click", async () => {
-        await setActiveFolderFilter(null);
+      newFolderButton.addEventListener("click", () => {
+        fireAndForget(handleCreateFolder(), "handleCreateFolder failed");
       });
     } catch (error) {
-      console.warn("Gemini Folders: safe inject skipped due to runtime error", error);
+      warnIfUnexpected(error, "safe inject skipped due to runtime error");
     }
   }
 
   function observeGeminiSidebar() {
-    let observer;
+    if (!isContextAlive) {
+      return;
+    }
 
     const tryInject = () => {
+      if (!isContextAlive) {
+        return;
+      }
+
+      if (document.getElementById(ROOT_ID)) {
+        return;
+      }
+
       const sidebar = findSidebar();
       if (sidebar) {
-        injectFoldersUI(sidebar);
+        fireAndForget(injectFoldersUI(sidebar), "injectFoldersUI failed");
       }
     };
 
     tryInject();
 
-    observer = new MutationObserver(() => {
-      observer.disconnect();
+    if (sidebarObserver) {
+      sidebarObserver.disconnect();
+      sidebarObserver = null;
+    }
+
+    sidebarObserver = new MutationObserver(() => {
+      if (!isContextAlive || !sidebarObserver) {
+        return;
+      }
       tryInject();
-      observer.observe(document.documentElement, {
-        childList: true,
-        subtree: true
-      });
     });
 
-    observer.observe(document.documentElement, {
+    if (!sidebarObserver || !isContextAlive || !document.documentElement) {
+      return;
+    }
+
+    sidebarObserver.observe(document.documentElement, {
       childList: true,
       subtree: true
     });
   }
 
   function startWhenReady() {
+    function handleUnhandledRejection(event) {
+      try {
+        if (isExtensionContextInvalidated(event.reason)) {
+          event.preventDefault();
+          shutdownOnContextInvalidation();
+        }
+      } catch {
+        shutdownOnContextInvalidation();
+      }
+    }
+
+    function handleGlobalError(event) {
+      try {
+        const candidate = event.error || event.message;
+        if (isExtensionContextInvalidated(candidate)) {
+          event.preventDefault();
+          shutdownOnContextInvalidation();
+        }
+      } catch {
+        shutdownOnContextInvalidation();
+      }
+    }
+
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    window.addEventListener("error", handleGlobalError);
+
     const init = () => {
       setTimeout(() => {
         observeGeminiSidebar();
