@@ -3,7 +3,7 @@
   const ROOT_ID = "gfo-folders-root";
   const QUICK_ADD_BUTTON_ID = "gfo-quick-add";
   const QUICK_ADD_MENU_ID = "gfo-quick-add-menu";
-  const collapsedFolderIds = new Set();
+  const expandedFolderIds = new Set();
   let activeFoldersRoot = null;
   let activeFoldersList = null;
   let sidebarObserver = null;
@@ -1027,7 +1027,7 @@
       return false;
     }
 
-    removal.removedIds.forEach((id) => collapsedFolderIds.delete(id));
+    removal.removedIds.forEach((id) => expandedFolderIds.delete(id));
 
     const saved = await saveFolderState({
       ...state,
@@ -1104,17 +1104,29 @@
     return dot;
   }
 
+  function createFolderIcon() {
+    const icon = document.createElement("span");
+    icon.className = "gfo-title-folder-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.innerHTML = `
+      <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+        <path d="M3 7.5C3 6.12 4.12 5 5.5 5h4.38c.53 0 1.04.21 1.41.59L12.7 7H18.5C19.88 7 21 8.12 21 9.5v7c0 1.38-1.12 2.5-2.5 2.5h-13C4.12 19 3 17.88 3 16.5v-9Z"></path>
+      </svg>
+    `;
+    return icon;
+  }
+
   function isFolderCollapsed(folderId) {
-    return collapsedFolderIds.has(folderId);
+    return !expandedFolderIds.has(folderId);
   }
 
   function setFolderCollapsed(folderId, collapsed) {
     if (collapsed) {
-      collapsedFolderIds.add(folderId);
+      expandedFolderIds.delete(folderId);
       return;
     }
 
-    collapsedFolderIds.delete(folderId);
+    expandedFolderIds.add(folderId);
   }
 
   async function refreshFolderUI() {
@@ -1365,7 +1377,7 @@
       const header = document.createElement("div");
       header.className = "gfo-header";
 
-      const titleIcon = createDot("gfo-title-dot");
+      const titleIcon = createFolderIcon();
 
       const title = document.createElement("h3");
       title.className = "gfo-title";

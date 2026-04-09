@@ -50,6 +50,24 @@
   margin-right: 12px;
 }
 
+.gfo-title-folder-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin-right: 10px;
+  color: #d7dbe0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gfo-title-folder-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  fill: currentColor;
+}
+
 .gfo-new-folder {
   margin-left: auto;
   display: inline-flex;
@@ -94,7 +112,7 @@
   flex-direction: column;
   gap: 0;
   padding: 0 0 8px;
-  max-height: 200px;
+  max-height: 350px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -246,13 +264,15 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: #232323;
   color: #e8eaed;
+  display: flex;
+  align-items: center;
   width: 100%;
   min-height: 32px;
-  padding: 0 10px;
+  padding: 6px 10px;
   border-radius: 8px;
   text-align: left;
   font-size: 12px;
-  line-height: 1.2;
+  line-height: 1.25;
   cursor: pointer;
   box-sizing: border-box;
   text-decoration: none;
