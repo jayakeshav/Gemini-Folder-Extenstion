@@ -19,20 +19,20 @@ A Manifest V3 Chrome extension that adds a custom folder organizer to the Gemini
 
 ### Folder Sidebar
 
-![Folder sidebar with nested folders](images/Folders.png)
+<img src="images/Folders.png" alt="Folder sidebar with nested folders" width="520" />
 
 ### Context Menu Assignment
 
-![Context menu flow to add or remove a chat from folders](images/add chat to folder.png)
+<img src="images/add_chat_to_folder.png" alt="Context menu flow to add or remove a chat from folders" width="520" />
 
 ### Quick Add Menu
 
-![Quick Add menu for assigning current chat to folders](images/quick add.png)
+<img src="images/quick_add.png" alt="Quick Add menu for assigning current chat to folders" width="520" />
 
 
 ### Backup and Restore Popup
 
-![Popup for exporting and importing backups](images/backup.png)
+<img src="images/backup.png" alt="Popup for exporting and importing backups" width="520" />
 
 ## Project Structure
 
