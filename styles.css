@@ -162,6 +162,14 @@
   justify-content: center;
   cursor: pointer;
   flex: 0 0 auto;
+  transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.gfo-toggle-folder:hover,
+.gfo-toggle-folder:focus-visible {
+  color: var(--gfo-folder-icon-open-color);
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.05);
 }
 
 .gfo-toggle-folder svg {
@@ -205,14 +213,20 @@
   min-width: 40px;
   opacity: 1;
   pointer-events: auto;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 999px;
   padding: 2px 4px;
 }
 
 .gfo-folder-item:hover .gfo-folder-actions {
   opacity: 1;
+}
+
+.gfo-folder-item:hover .gfo-toggle-folder {
+  color: var(--gfo-folder-icon-open-color);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
 }
 
 .gfo-folder-action {
@@ -366,9 +380,19 @@
   padding: 8px 10px;
 }
 
+#gfo-quick-add-slot {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 2;
+  margin-left: 8px;
+  pointer-events: auto;
+}
+
 #gfo-quick-add.gfo-quick-add {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
@@ -377,7 +401,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  margin-left: 4px;
+  margin: 0;
   flex: 0 0 auto;
 }
 
@@ -389,8 +413,16 @@
 }
 
 #gfo-quick-add.gfo-quick-add:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+#gfo-quick-add.gfo-quick-add:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(138, 180, 248, 0.6);
+  outline: none;
 }
 
 .gfo-quick-add-menu {

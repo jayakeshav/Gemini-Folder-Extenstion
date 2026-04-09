@@ -525,6 +525,12 @@
   }
 
   function removeQuickAddButton() {
+    const existingSlot = document.getElementById("gfo-quick-add-slot");
+    if (existingSlot) {
+      existingSlot.remove();
+      return;
+    }
+
     const existingButton = document.getElementById(QUICK_ADD_BUTTON_ID);
     if (existingButton) {
       existingButton.remove();
@@ -772,6 +778,11 @@
       return;
     }
 
+    const actionHost = actionGroup.closest?.("conversation-actions-icon") || actionGroup.querySelector?.("conversation-actions-icon") || null;
+    const actionsMenuButton = actionHost?.querySelector?.('button[aria-label*="Open menu for conversation actions" i]') || null;
+
+    let slot = document.getElementById("gfo-quick-add-slot");
+
     let button = document.getElementById(QUICK_ADD_BUTTON_ID);
 
     if (!button) {
@@ -785,12 +796,35 @@
       button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
+
+        if (quickAddMenu) {
+          closeQuickAddMenu();
+          return;
+        }
+
         fireAndForget(openQuickAddMenu(button), "openQuickAddMenu failed");
       });
     }
 
-    if (button.parentElement !== actionGroup) {
-      actionGroup.appendChild(button);
+    if (!slot) {
+      slot = document.createElement("span");
+      slot.id = "gfo-quick-add-slot";
+      slot.className = "gfo-quick-add-slot";
+    }
+
+    if (button.parentElement !== slot) {
+      slot.appendChild(button);
+    }
+
+    if (actionHost?.parentElement && actionsMenuButton) {
+      if (slot.parentElement !== actionHost || slot.previousElementSibling !== actionsMenuButton) {
+        actionsMenuButton.insertAdjacentElement("afterend", slot);
+      }
+      return;
+    }
+
+    if (slot.parentElement !== actionGroup) {
+      actionGroup.appendChild(slot);
     }
   }
 
