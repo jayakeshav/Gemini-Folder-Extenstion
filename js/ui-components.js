@@ -6,6 +6,8 @@
   const ROOT_ID = "gfo-folders-root";
   const QUICK_ADD_BUTTON_ID = "gfo-quick-add";
   const QUICK_ADD_MENU_ID = "gfo-quick-add-menu";
+  const TOAST_ID = "gfo-login-toast";
+  const TOAST_DISMISSED_KEY = "gfoLoginToastDismissed";
 
   GF.createFolderId = function() {
     if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
@@ -259,8 +261,55 @@
     });
   };
 
+  GF.showLoginToast = function() {
+    if (document.getElementById(TOAST_ID)) {
+      return;
+    }
+
+    let isDismissed = false;
+    try {
+      isDismissed = sessionStorage.getItem(TOAST_DISMISSED_KEY) === "1";
+    } catch {
+      isDismissed = false;
+    }
+
+    if (isDismissed) {
+      return;
+    }
+
+    const toast = document.createElement("div");
+    toast.id = TOAST_ID;
+    toast.className = "gfo-toast";
+
+    const message = document.createElement("span");
+    message.className = "gfo-toast-message";
+    message.textContent = "Log in to Gemini to organize your chats into folders.";
+
+    const dismissButton = document.createElement("button");
+    dismissButton.type = "button";
+    dismissButton.className = "gfo-toast-dismiss";
+    dismissButton.textContent = "Dismiss";
+    dismissButton.setAttribute("aria-label", "Dismiss login message");
+    dismissButton.addEventListener("click", () => {
+      toast.remove();
+      try {
+        sessionStorage.setItem(TOAST_DISMISSED_KEY, "1");
+      } catch {
+        // Ignore sessionStorage failures.
+      }
+    });
+
+    toast.append(message, dismissButton);
+    document.body.appendChild(toast);
+  };
+
   GF.findSidebar = function() {
-    return document.querySelector("bard-sidenav[role='navigation']") || document.querySelector("bard-sidenav");
+    const bardSideNav = document.querySelector("bard-sidenav[role='navigation']") || document.querySelector("bard-sidenav");
+    if (bardSideNav) {
+      return bardSideNav;
+    }
+
+    return document.querySelector("nav[aria-label*='Recent' i]");
   };
 
   GF.findHistoryContainer = function(sidebar) {
@@ -268,7 +317,11 @@
       return null;
     }
 
-    return sidebar.querySelector(".sidenav-with-history-container");
+    return (
+      sidebar.querySelector(".sidenav-with-history-container") ||
+      sidebar.querySelector("nav[aria-label*='Recent' i]") ||
+      (sidebar.matches("nav[aria-label*='Recent' i]") ? sidebar : null)
+    );
   };
 
   GF.findSidebarWrapper = function(sidebar) {
@@ -276,7 +329,7 @@
       return null;
     }
 
-    return sidebar;
+    return sidebar.closest("bard-sidenav, aside") || sidebar;
   };
 
   GF.isExpanded = function(historyContainer) {
@@ -328,12 +381,29 @@
       'side-nav-entry-button[data-test-id="my-stuff-side-nav-entry-button"]'
     );
 
-    if (!anchor) {
-      return false;
+    if (anchor) {
+      if (root.parentElement !== anchor.parentElement || root.previousElementSibling !== anchor) {
+        anchor.insertAdjacentElement("afterend", root);
+      }
+
+      return true;
     }
 
-    if (root.parentElement !== anchor.parentElement || root.previousElementSibling !== anchor) {
-      anchor.insertAdjacentElement("afterend", root);
+    const recentHeading = Array.from(wrapper.querySelectorAll("h1, h2, h3, [role='heading']")).find((node) => {
+      const label = (node.textContent || "").trim();
+      return /recent/i.test(label);
+    });
+
+    const fallbackAnchor = recentHeading || wrapper.querySelector("h2");
+    if (fallbackAnchor?.parentElement) {
+      if (root.parentElement !== fallbackAnchor.parentElement || root.nextElementSibling !== fallbackAnchor) {
+        fallbackAnchor.insertAdjacentElement("beforebegin", root);
+      }
+      return true;
+    }
+
+    if (wrapper.firstElementChild !== root || root.parentElement !== wrapper) {
+      wrapper.prepend(root);
     }
 
     return true;
@@ -350,7 +420,31 @@
         return;
       }
 
-      const existing = document.getElementById(ROOT_ID);
+      const isLoggedOut = GF.getUserId() === null;
+
+      if (isLoggedOut) {
+        const staleRoot = document.getElementById(ROOT_ID);
+        if (staleRoot) {
+          staleRoot.remove();
+        }
+
+        GF.activeFoldersRoot = null;
+        GF.activeFoldersList = null;
+        GF.showLoginToast();
+        return;
+      }
+
+      const existingToast = document.getElementById(TOAST_ID);
+      if (existingToast) {
+        existingToast.remove();
+      }
+
+      let existing = document.getElementById(ROOT_ID);
+      if (existing && !existing.querySelector(".gfo-list")) {
+        existing.remove();
+        existing = null;
+      }
+
       if (existing) {
         const mounted = GF.mountRoot(sidebar, existing);
         if (!mounted) {
@@ -359,6 +453,9 @@
 
         GF.activeFoldersRoot = existing;
         GF.activeFoldersList = existing.querySelector(".gfo-list");
+        if (!GF.activeFoldersList) {
+          return;
+        }
         GF.syncState(existing, historyContainer);
         GF.watchState(existing, historyContainer);
         GF.bindFolderContextMenuListener();

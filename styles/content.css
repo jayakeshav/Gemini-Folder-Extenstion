@@ -12,13 +12,12 @@
   flex-direction: column;
   gap: 0;
   width: 100%;
-  max-width: 100%;
+  max-width: none;
+  min-width: 0;
   overflow: hidden;
   box-sizing: border-box;
   align-self: stretch;
   position: static;
-  contain: layout;
-  will-change: transform;
   transition: none;
 }
 
@@ -119,6 +118,43 @@
   max-height: 350px;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.gfo-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  background: #2e2e2e;
+  color: #e8eaed;
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  border: 1px solid #444;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.gfo-toast-message {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.gfo-toast-dismiss {
+  border: 1px solid #5a5a5a;
+  background: transparent;
+  color: #e8eaed;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.gfo-toast-dismiss:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .gfo-folder-node {

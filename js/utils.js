@@ -49,10 +49,10 @@
       'img[alt*="profile" i]',
       'img[aria-label*="profile" i]',
       'img[alt*="account" i]',
-      'img[src*="googleusercontent" i]',
-      'img[src*="gstatic" i]',
       'button[aria-label*="profile" i] img',
       'button[aria-label*="account" i] img',
+      'a[aria-label*="profile" i] img',
+      'a[aria-label*="account" i] img',
       '[data-test-id*="profile" i] img',
       '[data-test-id*="account" i] img'
     ];
@@ -79,6 +79,25 @@
     }
 
     return "";
+  };
+
+  GF.isSignInPromptVisible = function() {
+    const nodes = Array.from(document.querySelectorAll("a, button"));
+
+    return nodes.some((node) => {
+      const text = String(node.textContent || "").trim();
+      const label = String(node.getAttribute("aria-label") || "").trim();
+      const title = String(node.getAttribute("title") || "").trim();
+      const href = String(node.getAttribute("href") || "").trim();
+
+      const hasSignInText = /\bsign\s*in\b/i.test(text) || /\bsign\s*in\b/i.test(label) || /\bsign\s*in\b/i.test(title);
+      if (!hasSignInText) {
+        return false;
+      }
+
+      // Prefer likely auth/navigation CTAs over unrelated text nodes.
+      return !href || /signin|accounts\.google\.com|login/i.test(href);
+    });
   };
 
   GF.extractEmailLikeValue = function(value) {
@@ -191,12 +210,27 @@
       return domUserId;
     }
 
-    const wizUserId = GF.getUserIdFromWizGlobalData();
-    if (wizUserId) {
-      return wizUserId;
+    if (GF.isSignInPromptVisible()) {
+      return null;
     }
 
-    return GF.getUserIdFromProfilePicture();
+    const wizUserId = GF.getUserIdFromWizGlobalData();
+    if (typeof wizUserId === "string") {
+      const normalized = wizUserId.trim();
+      const invalidWizValue = !normalized || normalized === "[object Object]" || /^undefined|null$/i.test(normalized);
+      const looksLikeEmail = Boolean(GF.extractEmailLikeValue(normalized));
+      const looksLikeAccountHandle = /@/.test(normalized) || /^profile_/i.test(normalized);
+      if (!invalidWizValue && (looksLikeEmail || looksLikeAccountHandle)) {
+        return normalized;
+      }
+    }
+
+    const profileUserId = GF.getUserIdFromProfilePicture();
+    if (profileUserId) {
+      return profileUserId;
+    }
+
+    return null;
   };
 
   GF.extractChatIdFromLink = function(link) {

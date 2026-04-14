@@ -29,6 +29,7 @@
     }
 
     GF.isContextAlive = false;
+    userContextRefreshScheduled = false;
 
     if (GF.sidebarObserver) {
       GF.sidebarObserver.disconnect();
@@ -42,6 +43,12 @@
 
     GF.closeFolderContextMenu();
     GF.closeQuickAddMenu();
+
+    GF.activeFoldersRoot = null;
+    GF.activeFoldersList = null;
+    GF.activeChatContext = null;
+    GF.quickAddEnsureScheduled = false;
+    GF.folderContextMenuBound = false;
   };
 
   GF.warnIfUnexpected = function(error, scope) {
@@ -814,6 +821,33 @@
       return;
     }
 
+    const sidebarProbeSelector = "bard-sidenav, nav[aria-label*='Recent' i], .sidenav-with-history-container";
+
+    const hasRecentChatList = () => {
+      const recentNav = document.querySelector("nav[aria-label*='Recent' i]");
+      if (!recentNav) {
+        return false;
+      }
+
+      // Some layouts show an empty Recent section before list entries are hydrated.
+      return Boolean(recentNav.querySelector("a[href*='/app/'], [data-test-id*='conversation' i]")) || recentNav.childElementCount > 0;
+    };
+
+    const mutationTouchesSidebar = (mutations) => {
+      return mutations.some((mutation) => {
+        return Array.from(mutation.addedNodes || []).some((node) => {
+          if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+            return false;
+          }
+
+          return (
+            (node.matches && node.matches(sidebarProbeSelector)) ||
+            (node.querySelector && node.querySelector(sidebarProbeSelector))
+          );
+        });
+      });
+    };
+
     const tryInject = () => {
       if (!GF.isContextAlive) {
         return;
@@ -821,12 +855,20 @@
 
       GF.syncUserContextWrapper();
 
-      if (document.getElementById(ROOT_ID)) {
+      const sidebar = GF.findSidebar();
+      if (!sidebar) {
         return;
       }
 
-      const sidebar = GF.findSidebar();
-      if (sidebar) {
+      const existingRoot = document.getElementById(ROOT_ID);
+      if (existingRoot) {
+        if (!sidebar.contains(existingRoot)) {
+          GF.fireAndForget(GF.injectFoldersUI(sidebar), "injectFoldersUI remount failed");
+        }
+        return;
+      }
+
+      if (hasRecentChatList() || sidebar.matches("bard-sidenav") || sidebar.querySelector(".sidenav-with-history-container")) {
         GF.fireAndForget(GF.injectFoldersUI(sidebar), "injectFoldersUI failed");
       }
     };
@@ -838,8 +880,13 @@
       GF.sidebarObserver = null;
     }
 
-    GF.sidebarObserver = new MutationObserver(() => {
+    GF.sidebarObserver = new MutationObserver((mutations) => {
       if (!GF.isContextAlive || !GF.sidebarObserver) {
+        return;
+      }
+
+      const rootExists = Boolean(document.getElementById(ROOT_ID));
+      if (!rootExists && !mutationTouchesSidebar(mutations) && !hasRecentChatList()) {
         return;
       }
 
@@ -892,6 +939,12 @@
     });
     window.addEventListener("popstate", () => {
       GF.syncSelectedCustomChatFromCurrentPath();
+    });
+    window.addEventListener("pagehide", () => {
+      GF.shutdownOnContextInvalidation();
+    });
+    window.addEventListener("beforeunload", () => {
+      GF.shutdownOnContextInvalidation();
     });
 
     const init = () => {
