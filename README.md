@@ -284,4 +284,4 @@ If Gemini's DOM structure changes and selectors break:
 
 ## Version
 
-Current manifest version: `1.0.0`
+Current manifest version: `1.0.3`

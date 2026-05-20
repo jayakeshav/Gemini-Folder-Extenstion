@@ -371,21 +371,53 @@
     });
   };
 
+  GF.syncRootPosition = function(wrapper, root) {
+    if (!wrapper || !root) {
+      return false;
+    }
+
+    const targetSection = wrapper.querySelector(
+      'expandable-section[data-test-id="notebooks-expandable-section"][storagekey="notebooks"]'
+    );
+
+    if (!targetSection?.parentNode) {
+      return false;
+    }
+
+    if (root.parentNode !== targetSection.parentNode || root.nextElementSibling !== targetSection) {
+      targetSection.parentNode.insertBefore(root, targetSection);
+    }
+
+    return true;
+  };
+
+  GF.watchRootPosition = function(wrapper, root) {
+    if (!wrapper || !root || wrapper.dataset.gfoRootObserverAttached === "true") {
+      return;
+    }
+
+    wrapper.dataset.gfoRootObserverAttached = "true";
+
+    const observer = new MutationObserver(() => {
+      GF.syncRootPosition(wrapper, root);
+    });
+
+    observer.observe(wrapper, {
+      childList: true,
+      subtree: true
+    });
+
+    GF.syncRootPosition(wrapper, root);
+  };
+
   GF.mountRoot = function(sidebar, root) {
     const wrapper = GF.findSidebarWrapper(sidebar);
     if (!wrapper) {
       return false;
     }
 
-    const anchor = wrapper.querySelector(
-      'side-nav-entry-button[data-test-id="my-stuff-side-nav-entry-button"]'
-    );
-
-    if (anchor) {
-      if (root.parentElement !== anchor.parentElement || root.previousElementSibling !== anchor) {
-        anchor.insertAdjacentElement("afterend", root);
-      }
-
+    if (GF.syncRootPosition(wrapper, root)) {
+      GF.watchRootPosition(wrapper, root);
       return true;
     }
 
@@ -399,12 +431,15 @@
       if (root.parentElement !== fallbackAnchor.parentElement || root.nextElementSibling !== fallbackAnchor) {
         fallbackAnchor.insertAdjacentElement("beforebegin", root);
       }
+      GF.watchRootPosition(wrapper, root);
       return true;
     }
 
     if (wrapper.firstElementChild !== root || root.parentElement !== wrapper) {
       wrapper.prepend(root);
     }
+
+    GF.watchRootPosition(wrapper, root);
 
     return true;
   };
